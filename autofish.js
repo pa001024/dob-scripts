@@ -5,21 +5,19 @@
 // @author pa
 // @version 1.0.0
 // @category 其他
-// @date 2/5/2026
+// @date 2026/2/18 01:05:48
 // ==/UserScript==
 
 async function main() {
     const hwnd = getWindowByProcessName("EM-Win64-Shipping.exe")
-    if (!hwnd) {
-        console.log("未找到窗口")
-        return
+    if (!hwnd || !isElevated()) {
+        throw new Error("未找到窗口或非管理员权限")
     }
     checkSize(hwnd)
-    setForegroundWindow(hwnd)
+    // setForegroundWindow(hwnd)
     await sleep(80)
-    while (hwnd === getForegroundWindow()) {
-        mc(hwnd, 1444, 779)
-        mc(hwnd, 1504, 794)
+    while (hwnd) {
+        mc(hwnd, 1424, 753)
         await sleep(80)
     }
     console.log("结束钓鱼")

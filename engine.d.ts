@@ -130,23 +130,30 @@ interface Mat {
      * 获取指定坐标的像素值（BGR格式）
      * @param row 行索引
      * @param col 列索引
-     * @returns [b, g, r] 数组或undefined
+     * @returns [b, g, r] 数组
      */
-    at_2d(row: number, col: number): [number, number, number] | undefined
+    at_2d(row: number, col: number): [number, number, number]
     /**
      * 获取指定坐标的RGB颜色值
      * @param x X坐标
      * @param y Y坐标
-     * @returns RGB颜色值（0xRRGGBB格式）或undefined
+     * @returns RGB颜色值（0xRRGGBB格式）
      */
-    get_rgb(x: number, y: number): number | undefined
+    get_rgb(x: number, y: number): number
+    /**
+     * 获取指定坐标的RGB颜色字符串
+     * @param x X坐标
+     * @param y Y坐标
+     * @returns RGB颜色字符串（#RRGGBB格式）
+     */
+    get_rgb_str(x: number, y: number): string
     /**
      * 获取指定坐标的HSL颜色值
      * @param x X坐标
      * @param y Y坐标
-     * @returns [hue, saturation, luminance] 数组或undefined
+     * @returns [hue, saturation, luminance] 数组
      */
-    get_hsl(x: number, y: number): [number, number, number] | undefined
+    get_hsl(x: number, y: number): [number, number, number]
     /**
      * 按指定方向查找符合条件的颜色
      * @param x 起始X坐标
@@ -233,6 +240,16 @@ declare function mm(x: number, y: number): void
 declare function moveTo(hwnd: number, x: number, y: number, duration?: number): Promise<void>
 
 /**
+ * 鼠标绝对移动后点击 (带缓动)
+ * @param hwnd 窗口句柄(为0表示屏幕坐标)
+ * @param x 目标X坐标
+ * @param y 目标Y坐标
+ * @param duration 移动持续时间（毫秒），默认0
+ * @returns Promise<void>
+ */
+declare function moveC(hwnd: number, x: number, y: number, duration?: number): Promise<void>
+
+/**
  * 鼠标按下
  * @param hwnd 窗口句柄 (为0表示前台)
  * @param x X坐标
@@ -255,6 +272,15 @@ declare function mu(hwnd?: number, x?: number, y?: number): void
  * @param y Y坐标
  */
 declare function mt(hwnd?: number, x?: number, y?: number): void
+
+/**
+ * 鼠标滚轮
+ * @param hwnd 窗口句柄 (为0表示前台)
+ * @param x X坐标（可选，前台模式下 >0 时会先移动到该坐标）
+ * @param y Y坐标（可选，前台模式下 >0 时会先移动到该坐标）
+ * @param delta 滚轮增量（常用 120 / -120）
+ */
+declare function wheel(hwnd?: number, x?: number, y?: number, delta?: number): void
 
 /**
  * 按键操作（异步）
@@ -303,6 +329,18 @@ declare function copyText(text: string): void
 declare function pasteText(): string | undefined
 
 /**
+ * 设置脚本运行状态并推送到前端（按标题维护，可同时存在多条状态）
+ * @param title 状态标题（必填）
+ * @param payload 状态内容（可选）：传 Mat 显示单图，传 Mat[] 显示多图，传其他值显示文本
+ * @param payloadText 附加文本（可选）：仅当 payload 为 Mat / Mat[] 时生效
+ *
+ * 规则：
+ * - 相同 title 会更新已有状态
+ * - 当 payload 为空时，表示删除该 title 对应状态
+ */
+declare function setStatus(title: string, payload?: string | number | boolean | Mat | Mat[], payloadText?: string | number | boolean): void
+
+/**
  * 根据窗口标题查找窗口句柄
  * @param title 窗口标题
  * @returns 窗口句柄或0
@@ -345,6 +383,12 @@ declare function moveWindow(hwnd: number, x: number, y: number, w?: number, h?: 
  * @returns 窗口句柄
  */
 declare function getForegroundWindow(): number
+
+/**
+ * 检查当前进程是否以管理员权限运行
+ * @returns true 表示管理员权限，false 表示非管理员权限
+ */
+declare function isElevated(): boolean
 
 /**
  * 从窗口捕获图像Mat对象
@@ -416,11 +460,11 @@ declare function imreadUrl(localPath: string, url: string): Mat
 
 /**
  * 保存Mat对象到文件
- * @param imgMat 图像Mat对象
  * @param path 保存路径
+ * @param imgMat 图像Mat对象
  * @returns 是否成功
  */
-declare function imwrite(imgMat: Mat, path: string): boolean
+declare function imwrite(path: string, imgMat: Mat): boolean
 
 /**
  * 复制Mat对象到剪贴板
@@ -430,12 +474,33 @@ declare function imwrite(imgMat: Mat, path: string): boolean
 declare function copyImage(imgMat: Mat): boolean
 
 /**
- * 显示图片 (异步)
+ * 显示图片（异步、非阻塞刷新）
  * @param title 窗口标题
  * @param imgMat 图像Mat对象
- * @param waitKeyMs 等待按键时间（毫秒），默认0 无限等待
+ * @param waitKeyMs 可选延迟（毫秒），仅影响 Promise resolve 时间，不阻塞其他窗口刷新
+ *
+ * 说明：
+ * - 相同 title 重复调用会实时更新同一窗口图像
+ * - 不同 title 可同时显示多张图像
  */
 declare function imshow(title: string, imgMat: Mat, waitKeyMs?: number): Promise<void>
+
+/**
+ * 交互式选择图像 ROI（异步）
+ * @param title 窗口标题
+ * @param imgMat 图像Mat对象
+ * @param showCrosshair 是否显示十字光标，默认 true
+ * @param fromCenter 是否从中心开始框选，默认 false
+ * @param printNotice 是否在控制台打印操作提示，默认 true
+ * @returns 选区 [x, y, w, h]，取消选择返回 undefined
+ */
+declare function selectroi(
+    title: string,
+    imgMat: Mat,
+    showCrosshair?: boolean,
+    fromCenter?: boolean,
+    printNotice?: boolean
+): Promise<[number, number, number, number] | undefined>
 
 /**
  * 颜色和模板匹配（使用两个Mat对象）
@@ -469,6 +534,15 @@ declare function matchTemplate(imgMat: Mat, templateMat: Mat, tolerance: number)
  * @returns 灰度二值图 Mat（命中为255，未命中为0）
  */
 declare function colorFilter(mat: Mat, colors: number[], tolerance: number): Mat
+
+/**
+ * 使用 HSL 加权差进行色键过滤并返回灰度二值图
+ * @param mat 源图像 Mat
+ * @param colors 色键数组（例如 [0xffffff, 0xff0000]）
+ * @param tolerance HSL 加权差容差，公式：abs(h1-h2) + abs(s1-s2)*180 + abs(l1-l2)*75
+ * @returns 灰度二值图 Mat（命中为255，未命中为0）
+ */
+declare function colorFilterHSL(mat: Mat, colors: number[], tolerance: number): Mat
 
 /**
  * 色键匹配，返回匹配像素 mean 最大的颜色索引
@@ -526,6 +600,20 @@ declare function siftLocate(
 declare function perceptualHash(imgMat: Mat, color?: boolean): string
 
 /**
+ * 计算图像 ORB 特征哈希
+ * @param imgMat 图像 Mat
+ * @returns 十六进制哈希字符串（固定 64 字符）
+ */
+declare function orbFeatureHash(imgMat: Mat): string
+
+/**
+ * 预测图像旋转角度（适用于罗盘/圆盘类方向识别）
+ * @param imgMat 图像 Mat（BGR 三通道）
+ * @returns 角度（0-359）
+ */
+declare function predictRotation(imgMat: Mat): number
+
+/**
  * 比较源哈希与模板哈希数组的汉明距离，返回匹配索引
  * @param sourceHash 源图像哈希（十六进制字符串）
  * @param templateHashes 模板哈希数组（十六进制字符串数组）
@@ -533,6 +621,15 @@ declare function perceptualHash(imgMat: Mat, color?: boolean): string
  * @returns 匹配索引；未匹配返回 -1
  */
 declare function matchHammingHash(sourceHash: string, templateHashes: string[], maxDistance?: number): number
+
+/**
+ * 比较 ORB 哈希与模板哈希数组，返回匹配索引
+ * @param sourceHash 源图像 ORB 哈希（十六进制字符串，固定 64 字符）
+ * @param templateHashes 模板 ORB 哈希数组（十六进制字符串数组）
+ * @param maxDistance 最大允许汉明距离（默认 0，表示精确匹配）
+ * @returns 匹配索引；未匹配返回 -1
+ */
+declare function matchOrbHash(sourceHash: string, templateHashes: string[], maxDistance?: number): number
 
 /**
  * 形态学图像处理
@@ -571,6 +668,53 @@ declare function findContours(
 }[]
 
 /**
+ * 基于灰度图与横向空隙检测的单行文本字符分割
+ * @param imgMat 输入图像 Mat（建议灰度图；彩色会自动转灰度）
+ * @param minGapWidth 最小分割空隙宽度（像素列，默认 2）
+ * @param minCharWidth 最小字符宽度（像素，默认 2）
+ * @returns 字符 bbox 数组，格式为 [[x, y, w, h], ...]
+ */
+declare function segmentChars(
+    imgMat: Mat,
+    minGapWidth?: number,
+    minCharWidth?: number
+): [number, number, number, number][]
+
+/**
+ * 轮廓绘制（返回绘制后的 BGR 图像）
+ * @param imgMat 输入图像 Mat
+ * @param bboxes 外接框数组，元素可为 [x,y,w,h] 或 { bbox: [x,y,w,h] }
+ * @param color 轮廓颜色（RGB，默认 0x00FF00）
+ * @param thickness 线宽（默认 1）
+ * @returns 绘制后的 Mat（BGR 三通道）
+ */
+declare function drawContours(
+    imgMat: Mat,
+    bboxes: ([number, number, number, number] | { bbox: [number, number, number, number] })[],
+    color?: number,
+    thickness?: number
+): Mat
+
+/**
+ * 轮廓绘制（内部会先做 findContours 再绘制）
+ * @param imgMat 输入图像 Mat
+ * @param minArea 最小面积过滤（默认0）
+ * @param mode 检索模式（"external"|"list"|"ccomp"|"tree"|"floodfill" 或 OpenCV 常量值）
+ * @param method 轮廓逼近（"none"|"simple"|"tc89l1"|"tc89kcos" 或 OpenCV 常量值）
+ * @param color 轮廓颜色（RGB，默认 0x00FF00）
+ * @param thickness 线宽（默认 1）
+ * @returns 绘制后的 Mat（BGR 三通道）
+ */
+declare function drawContours(
+    imgMat: Mat,
+    minArea?: number,
+    mode?: "external" | "list" | "ccomp" | "tree" | "floodfill" | number,
+    method?: "none" | "simple" | "tc89l1" | "tc89kcos" | number,
+    color?: number,
+    thickness?: number
+): Mat
+
+/**
  * 绘制边框
  * @param hwnd 窗口句柄
  * @param x 左上角X坐标（相对窗口客户区）
@@ -590,6 +734,85 @@ declare function drawBorder(hwnd: number, x: number, y: number, w: number, h: nu
  * @returns 检查结果
  */
 declare function cc(imgMat: Mat, x: number, y: number, color: number, tolerance: number): boolean
+
+/**
+ * 等待窗口指定坐标颜色达到条件（异步）
+ * @param hwnd 窗口句柄
+ * @param x X坐标（窗口客户区）
+ * @param y Y坐标（窗口客户区）
+ * @param color 目标颜色（0xRRGGBB）
+ * @param tolerance 容差（正数=等待符合，负数=等待不符合，按绝对值参与比较）
+ * @param timeout 超时时间（毫秒），默认 20000
+ * @returns 命中条件返回 true，超时返回 false
+ */
+declare function waitColor(
+    hwnd: number,
+    x: number,
+    y: number,
+    color: number,
+    tolerance: number,
+    timeout?: number
+): Promise<boolean>
+
+type ScriptConfigBaseType = "number" | "string" | "boolean" | "bool" | "select" | "multi-select"
+type ScriptConfigStringFormat = ScriptConfigBaseType | `select:${string}` | `multi-select:${string}`
+type ScriptConfigObjectFormat =
+    | {
+          type: "number"
+      }
+    | {
+          type: "string"
+      }
+    | {
+          type: "boolean" | "bool"
+      }
+    | {
+          type: "select"
+          options?: readonly string[]
+      }
+    | {
+          type: "multi-select"
+          options?: readonly string[]
+      }
+type ScriptConfigFormat = ScriptConfigStringFormat | ScriptConfigObjectFormat | readonly string[]
+
+type ScriptConfigValueByType<T extends string> = T extends "number"
+    ? number
+    : T extends "boolean" | "bool"
+        ? boolean
+        : T extends "multi-select" | `multi-select:${string}`
+            ? string[]
+            : T extends "select" | `select:${string}`
+                ? string
+                : T extends "string"
+                    ? string
+                    : string
+
+type ScriptConfigValueByFormat<F extends ScriptConfigFormat> = F extends readonly string[]
+    ? string
+    : F extends {
+          type: infer T extends string
+      }
+        ? ScriptConfigValueByType<T>
+        : F extends string
+            ? ScriptConfigValueByType<F>
+            : string
+
+/**
+ * 读取脚本配置项（会触发前端创建/更新配置 UI）
+ * @param name 配置名（唯一键）
+ * @param desc 配置描述
+ * @param format 配置格式（number/string/select/multi-select/boolean）
+ * @param defaultValue 默认值
+ * @remarks 配置项按“脚本文件”做作用域隔离，不同文件互不影响
+ * @returns 当前配置值（优先返回前端持久化值，返回类型由 format 精确推断）
+ */
+declare function readConfig<F extends ScriptConfigFormat>(
+    name: string,
+    desc: string,
+    format: F,
+    defaultValue?: ScriptConfigValueByFormat<F>
+): ScriptConfigValueByFormat<F>
 
 /**
  * 设置程序音量
