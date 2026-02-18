@@ -1,11 +1,11 @@
 // ==UserScript==
-// @id -
+// @id PIsZFusRM5
 // @name autofishv2
 // @description 自动钓鱼V2 自动转点 纯后台
 // @author pa
 // @version 2.0.0
 // @category 其他
-// @date 2026/2/18 01:14:37
+// @date 2026/2/18 13:27:54
 // ==/UserScript==
 
 // 说明: 慎开联机 可能会挡住F键
@@ -50,22 +50,28 @@ checkSize(hwnd)
 function identifyTime(frame) {
     const tpls = ["2d0cd3d9e7343922", "d2d0bdf12c2cc332", "16cddc1613fc6462"]
     const names = ["上午", "下午", "夜晚"]
-    const phash = perceptualHash(frame.roi(1522, 112, 41, 42))
+    const roi = frame.roi(1522, 112, 41, 42)
+    const phash = perceptualHash(roi)
     const index = matchHammingHash(phash, tpls, 10)
-    if (index >= 0)
+    if (index >= 0) {
+        setStatus("identifyTime", roi, `${phash} ${names[index]}`)
         return {
             index,
             name: names[index],
             locate: "menu",
         }
-    const phash2 = perceptualHash(frame.roi(111, 27, 41, 42))
+    }
+    const roi2 = frame.roi(111, 27, 41, 42)
+    const phash2 = perceptualHash(roi2)
     const index2 = matchHammingHash(phash2, tpls, 10)
-    if (index2 >= 0)
+    if (index2 >= 0) {
+        setStatus("identifyTime", roi2, `${phash2} ${names[index2]}`)
         return {
             index: index2,
             name: names[index2],
             locate: "fishing",
         }
+    }
 }
 
 /** 换鱼池 @param {string} name  */
@@ -115,16 +121,25 @@ async function checkPoolTime(name) {
         枯荣阁: [0, 1, 2],
         微茫市: [0, 2],
     }
-    const frame = captureWindowWGC(hwnd)
-    const time = identifyTime(frame)
-    const valid = name ? pools[name].includes(time?.index || -1) : false
+    const timer = new Timer()
+    let valid = false
+    while (timer.elapsed() < 2e3) {
+        await sleep(500)
+        const frame = captureWindowWGC(hwnd)
+        const time = identifyTime(frame)
+        if (time) {
+            valid = pools[name].includes(time.index)
+            break
+        }
+    }
     currentAllowedTimes = pools[name]
     currentPool = name
     if (!valid) {
+        console.log(`${name}时间不符合设定: ${pools[name]}`)
         kb(hwnd, "esc")
-        await sleep(500)
+        await sleep(800)
         kb(hwnd, "esc")
-        await sleep(500)
+        await sleep(800)
         mc(hwnd, 57, 417)
         await adjustTime()
         setStatus("fn", "checkPoolTime:after")
@@ -166,10 +181,12 @@ async function gotoStartPoint() {
     setStatus("state", `起点(枯荣阁)`)
     setStatus("fn", "gotoStartPoint")
     setStatus("substate", `传送休憩之所`)
-    kb(hwnd, "m") // 打开地图
-    await sleep(500)
-    kb(hwnd, "h") // 休憩之所
-    await sleep(300)
+    do {
+        kb(hwnd, "m") // 打开地图
+    } while (!(await waitColor(hwnd, 25, 23, 0xffffce, 30, 1000)))
+    do {
+        kb(hwnd, "h") // 休憩之所
+    } while (!(await waitColor(hwnd, 531, 379, 0x000000, 10, 1000)))
     mc(hwnd, 953, 502) // 确定
     await sleep(1000)
     setStatus("substate", `等待传送休憩之所`)
@@ -206,18 +223,15 @@ async function waitTP(name) {
     if (!result) return false
     setStatus("substate", `往前走${name}`)
     kd(hwnd, "w")
-    const timer = new Timer()
-    while (timer.elapsed() < 60e3) {
-        const frame = captureWindowWGC(hwnd)
-        if (cc(frame, 954, 446, 0x000000, 5) && cc(frame, 967, 455, 0x000000, 5)) {
-            setStatus("substate")
-            console.log(`${name}转点成功`)
-            ku(hwnd, "w")
+    if (await waitF()) {
+        setStatus("substate")
+        console.log(`${name}转点成功`)
+        ku(hwnd, "w")
+        do {
             kb(hwnd, "f")
             await sleep(1000)
-            return true
-        }
-        await sleep(100)
+        } while (!(await waitColor(hwnd, 24, 22, 0xffffdc, 30)))
+        return true
     }
     console.log(`${name}转点失败`)
     return false
@@ -365,8 +379,32 @@ async function fishLoop() {
         mc(hwnd, 1504, 794)
         await sleep(1000)
     }
-    kb(hwnd, "esc")
+    setStatus("substate", "退出钓鱼")
+    while (true) {
+        await sleep(500)
+        const frame = captureWindowWGC(hwnd)
+        const time = identifyTime(frame)
+        if (time && time.locate === "fishing") {
+            kb(hwnd, "esc")
+        } else if (time) {
+            break
+        }
+    }
     await sleep(1000)
+}
+
+async function waitF() {
+    const timer = new Timer()
+    while (timer.elapsed() < 5000) {
+        await sleep(50)
+        const frame = captureWindowWGC(hwnd)
+        const phash = perceptualHash(frame.roi(955, 442, 14, 16))
+        const matched = matchHammingHash(phash, ["a6a69e19631c69e2"], 10) >= 0
+        if (matched) {
+            return true
+        }
+    }
+    return false
 }
 
 async function main() {

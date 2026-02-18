@@ -393,18 +393,27 @@ declare function isElevated(): boolean
 /**
  * 从窗口捕获图像Mat对象
  * @param hwnd 窗口句柄
+ * @param x ROI 左上角 X（可选，相对客户区）
+ * @param y ROI 左上角 Y（可选，相对客户区）
+ * @param w ROI 宽度（可选）
+ * @param h ROI 高度（可选）
+ * @param useWgc 是否使用 WGC 实现（可选，默认 false）
  * @returns Mat对象
  * @throws 捕获窗口失败时抛出错误
  */
-declare function captureWindow(hwnd: number): Mat
+declare function captureWindow(hwnd: number, x?: number, y?: number, w?: number, h?: number, useWgc?: boolean): Mat
 
 /**
  * 从窗口捕获图像Mat对象（WGC优化版）
  * @param hwnd 窗口句柄
+ * @param x ROI 左上角 X（可选，相对客户区）
+ * @param y ROI 左上角 Y（可选，相对客户区）
+ * @param w ROI 宽度（可选）
+ * @param h ROI 高度（可选）
  * @returns Mat对象
  * @throws 捕获窗口失败时抛出错误
  */
-declare function captureWindowWGC(hwnd: number): Mat
+declare function captureWindowWGC(hwnd: number, x?: number, y?: number, w?: number, h?: number): Mat
 
 /**
  * 从文件加载模板Mat对象(有缓存)
@@ -674,11 +683,7 @@ declare function findContours(
  * @param minCharWidth 最小字符宽度（像素，默认 2）
  * @returns 字符 bbox 数组，格式为 [[x, y, w, h], ...]
  */
-declare function segmentChars(
-    imgMat: Mat,
-    minGapWidth?: number,
-    minCharWidth?: number
-): [number, number, number, number][]
+declare function segmentChars(imgMat: Mat, minGapWidth?: number, minCharWidth?: number): [number, number, number, number][]
 
 /**
  * 轮廓绘制（返回绘制后的 BGR 图像）
@@ -745,14 +750,7 @@ declare function cc(imgMat: Mat, x: number, y: number, color: number, tolerance:
  * @param timeout 超时时间（毫秒），默认 20000
  * @returns 命中条件返回 true，超时返回 false
  */
-declare function waitColor(
-    hwnd: number,
-    x: number,
-    y: number,
-    color: number,
-    tolerance: number,
-    timeout?: number
-): Promise<boolean>
+declare function waitColor(hwnd: number, x: number, y: number, color: number, tolerance: number, timeout?: number): Promise<boolean>
 
 type ScriptConfigBaseType = "number" | "string" | "boolean" | "bool" | "select" | "multi-select"
 type ScriptConfigStringFormat = ScriptConfigBaseType | `select:${string}` | `multi-select:${string}`
@@ -779,24 +777,24 @@ type ScriptConfigFormat = ScriptConfigStringFormat | ScriptConfigObjectFormat | 
 type ScriptConfigValueByType<T extends string> = T extends "number"
     ? number
     : T extends "boolean" | "bool"
-        ? boolean
-        : T extends "multi-select" | `multi-select:${string}`
-            ? string[]
-            : T extends "select" | `select:${string}`
-                ? string
-                : T extends "string"
-                    ? string
-                    : string
+      ? boolean
+      : T extends "multi-select" | `multi-select:${string}`
+        ? string[]
+        : T extends "select" | `select:${string}`
+          ? string
+          : T extends "string"
+            ? string
+            : string
 
 type ScriptConfigValueByFormat<F extends ScriptConfigFormat> = F extends readonly string[]
     ? string
     : F extends {
-          type: infer T extends string
-      }
-        ? ScriptConfigValueByType<T>
-        : F extends string
-            ? ScriptConfigValueByType<F>
-            : string
+            type: infer T extends string
+        }
+      ? ScriptConfigValueByType<T>
+      : F extends string
+        ? ScriptConfigValueByType<F>
+        : string
 
 /**
  * 读取脚本配置项（会触发前端创建/更新配置 UI）
