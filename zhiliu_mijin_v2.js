@@ -5,11 +5,10 @@
 // @author pa
 // @version 2.0.0
 // @category 其他
-// @date 2026/2/18
+// @date 2026/2/20 22:05:21
 // ==/UserScript==
 
-// 说明: 视角设置全默认 视距1.3
-// 止流带专武赘生雷月卡 潜质攻击减CD复活
+// 止流带专武赘生雷月卡/球球蜂 不推荐带防御魔灵 打慢了缺蓝死循环 潜质攻击减CD复活
 
 const config = {
     门顺序: readConfig(
@@ -336,7 +335,6 @@ function checkState(frame) {
 }
 
 /** 检查地图 @param {Mat} frame */
-/** 检查地图 @param {Mat} frame */
 function checkMap(frame) {
     const points = [
         cc(frame, 75, 104, 0x0a0b0a, 10),
@@ -434,7 +432,7 @@ function pickSnapAngle(delta) {
  * @param {number} angle 取值建议: ±45/±90/±135/180
  * @param {number} [duration]
  */
-async function faceRelative(angle, duration = 70) {
+async function faceRelative(angle, duration = 120) {
     const key = turnKeyMap[`${angle}`]
     if (!key) return
     await tapTurnKeys(key, duration)
@@ -496,8 +494,18 @@ async function fastMove(angle, distance) {
     if (angle !== undefined) await turnAbs(angle)
     kd(hwnd, "w")
     await sleep(33)
-    if (distance === undefined || distance > 4) await kb(hwnd, "shift", 33)
-    if (distance !== undefined && distance > 10) await kb(hwnd, "space", 33)
+    await kb(hwnd, "space")
+    await sleep(500)
+    await kb(hwnd, "4", 33)
+    await sleep(500)
+    if (distance === undefined || distance > 4) {
+        await kb(hwnd, "shift", 33)
+        await sleep(500)
+        await kb(hwnd, "space")
+        await sleep(500)
+        await kb(hwnd, "4", 33)
+        await sleep(500)
+    }
     const moveTime = distance === undefined ? 1400 : clamp(Math.round(500 + distance * 220), 500, 3200)
     await sleep(moveTime)
     ku(hwnd, "w")
@@ -603,6 +611,20 @@ async function moveLoop(frame, fn = findDoor) {
         const newmap = checkMap(frame)
         if (newmap === map) break
         map = newmap
+    }
+    // 未识别到重置后再试一次
+    if (map === "unknown") {
+        await resetLoop()
+        await sleep(1000)
+        map = checkMap(frame)
+        for (let i = 0; i < 10; i++) {
+            await sleep(1000)
+            frame = captureWindowWGC(hwnd)
+            // 多等待几帧 等地图稳定
+            const newmap = checkMap(frame)
+            if (newmap === map) break
+            map = newmap
+        }
     }
     switch (map) {
         case "zuoguai":
@@ -731,6 +753,7 @@ async function moveLoop(frame, fn = findDoor) {
             setStatus("err", "未找到门")
         }
         if (totalTimeout.elapsed() > 13e3) {
+            ku(hwnd, "w")
             console.log("移动超时")
             await resetLoop()
             resetFlag = true
@@ -819,14 +842,16 @@ async function resetLoop(skip = false) {
     kb(hwnd, "esc", 33)
     await sleep(800)
     if (!skip) {
-        await moveC(hwnd, 1115, 820, 300)
+        mc(hwnd, 1115, 820)
         await sleep(500)
-        await moveC(hwnd, 563, 28, 500)
-        await moveC(hwnd, 1014, 380, 500)
-        await sleep(200)
+        mc(hwnd, 563, 28)
+        await sleep(500)
+        mc(hwnd, 1014, 380)
+        await sleep(500)
         mc(hwnd, 1010, 379)
+        await sleep(500)
     }
-    await moveC(hwnd, 999, 506, 100)
+    mc(hwnd, 999, 506)
     await sleep(500)
     mt()
     await sleep(500)
@@ -853,15 +878,13 @@ async function selectShopOption(frame) {
     await sleep(100)
 }
 
-const xtimer = setInterval(() => {
-    if (!checkStop()) clearInterval(xtimer)
-    kb(hwnd, "x")
-}, 2e3)
-
 async function main() {
-    setForegroundWindow(hwnd)
     await sleep(100)
 
+    const xtimer = setInterval(() => {
+        if (!checkStop()) clearInterval(xtimer)
+        kb(hwnd, "x")
+    }, 2e3)
     // const frame = captureWindowWGC(hwnd)
     // const r0 = findDoor(frame)
     // if (r0) drawBorder(hwnd, ...r0.match.bbox)
@@ -878,9 +901,6 @@ async function main() {
     while (checkStop()) {
         const frame = captureWindowWGC(hwnd)
         const state = checkState(frame)
-        // const roi = await selectroi("roi", frame)
-        // console.log(state, roi)
-        // copyText(JSON.stringify(roi))
         setStatus("state", state)
         switch (state) {
             case "door":

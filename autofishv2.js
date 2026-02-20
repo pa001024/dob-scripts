@@ -3,9 +3,9 @@
 // @name autofishv2
 // @description 自动钓鱼V2 自动转点 纯后台
 // @author pa
-// @version 2.0.0
+// @version 2.0.1
 // @category 其他
-// @date 2026/2/18 13:27:54
+// @date 2026/2/20 20:57:54
 // ==/UserScript==
 
 // 说明: 慎开联机 可能会挡住F键
@@ -54,7 +54,7 @@ function identifyTime(frame) {
     const phash = perceptualHash(roi)
     const index = matchHammingHash(phash, tpls, 10)
     if (index >= 0) {
-        setStatus("identifyTime", roi, `${phash} ${names[index]}`)
+        setStatus("identifyTime", roi, `menu:${phash} ${names[index]}`)
         return {
             index,
             name: names[index],
@@ -65,7 +65,7 @@ function identifyTime(frame) {
     const phash2 = perceptualHash(roi2)
     const index2 = matchHammingHash(phash2, tpls, 10)
     if (index2 >= 0) {
-        setStatus("identifyTime", roi2, `${phash2} ${names[index2]}`)
+        setStatus("identifyTime", roi2, `fishing:${phash2} ${names[index2]}`)
         return {
             index: index2,
             name: names[index2],
@@ -166,13 +166,13 @@ async function adjustTime() {
         const phash = perceptualHash(roi)
         setStatus("time", roi, phash)
 
-        const is6 = matchHammingHash(phash, ["bd660d56e15621b8", "a976ad56e11621b8", "99f2ad2c711e42b8"], 5) >= 0
+        const is6 = matchHammingHash(phash, ["bd660d56e15621b8", "a976ad56e11621b8", "99f2ad2c711e42b8"], 10) >= 0
         if (is6) {
             console.log("时间调整成功")
             return
         } else {
             wheel(hwnd, 1488, 454, -120)
-            await sleep(400)
+            await sleep(800)
         }
     }
 }
@@ -385,7 +385,9 @@ async function fishLoop() {
         const frame = captureWindowWGC(hwnd)
         const time = identifyTime(frame)
         if (time && time.locate === "fishing") {
+            console.log("esc 退出钓鱼")
             kb(hwnd, "esc")
+            await sleep(2000)
         } else if (time) {
             break
         }

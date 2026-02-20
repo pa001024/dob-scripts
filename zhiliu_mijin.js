@@ -5,7 +5,7 @@
 // @author pa
 // @version 1.0.0
 // @category 其他
-// @date 2026/2/17
+// @date 2026/2/18 16:49:56
 // ==/UserScript==
 
 // 说明: 视角设置全默认 视距1.3
@@ -369,7 +369,7 @@ function checkMap(frame) {
             case "00000000011":
                 return "bossfang"
             default:
-                return "unknown"
+                return points.startsWith("1111") ? "maybe" : "unknown"
         }
     }
     const state = getMap(points)
@@ -414,8 +414,6 @@ async function fastMove(angle, distance) {
         await sleep(33)
         await kb(hwnd, "space")
         await sleep(500)
-        // await kb(hwnd, "space")
-        // await sleep(600)
         await kb(hwnd, "4", 33)
         await sleep(900)
         mm(0, 300)
@@ -581,6 +579,12 @@ async function moveLoop(frame, fn = findDoor) {
         const newmap = checkMap(frame)
         if (newmap === map) break
         map = newmap
+    }
+    if (map === "maybe") {
+        await resetLoop()
+        await sleep(1000)
+        frame = captureWindowWGC(hwnd)
+        map = checkMap(frame)
     }
     switch (map) {
         case "zuoguai":
@@ -814,10 +818,13 @@ async function selectShopOption(frame) {
     await sleep(100)
 }
 
+let frame = captureWindowWGC(hwnd)
+
 const xtimer = setInterval(() => {
     if (!checkStop()) clearInterval(xtimer)
     kb(hwnd, "x")
-}, 2e3)
+    frame = captureWindowWGC(hwnd)
+}, 50)
 
 async function main() {
     setForegroundWindow(hwnd)

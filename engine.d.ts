@@ -110,6 +110,11 @@ interface Mat {
     /** 矩阵列数 */
     cols(): number
     /**
+     * 显式克隆当前 Mat（深拷贝）
+     * @returns 克隆后的 Mat
+     */
+    clone(): Mat
+    /**
      * 裁剪图像区域并返回新的 Mat
      * @param x 起始 X 坐标
      * @param y 起始 Y 坐标
@@ -194,6 +199,101 @@ interface Mat {
     ): [number, number] | undefined
 }
 
+/**
+ * OpenCV DNN 网络对象（`cv.dnn.readNetFromCaffe` 返回值）
+ */
+interface DnnNet {
+    /**
+     * 判断网络是否为空
+     * @returns true 表示未加载有效网络
+     */
+    empty(): boolean
+    /**
+     * 设置 DNN 后端
+     * @param backendId 后端 ID（例如 cv.dnn.DNN_BACKEND_OPENCV）
+     */
+    setPreferableBackend(backendId: number): void
+    /**
+     * 设置 DNN 目标设备
+     * @param targetId 目标 ID（例如 cv.dnn.DNN_TARGET_CPU）
+     */
+    setPreferableTarget(targetId: number): void
+    /**
+     * 设置网络输入
+     * @param blob 输入 blob（通常由 cv.dnn.blobFromImage 生成）
+     * @param name 输入层名（可选）
+     * @param scalefactor 归一化系数（可选，默认 1.0）
+     * @param mean 均值（可选，number 或 [v0,v1,v2,v3]）
+     */
+    setInput(
+        blob: Mat,
+        name?: string,
+        scalefactor?: number,
+        mean?: number | [number, number, number] | [number, number, number, number]
+    ): void
+    /**
+     * 前向推理
+     * @param outputName 输出层名（可选，空时执行整网默认输出）
+     * @returns 输出 blob Mat
+     */
+    forward(outputName?: string): Mat
+    /**
+     * 获取未连接输出层名
+     * @returns 输出层名数组
+     */
+    getUnconnectedOutLayersNames(): string[]
+}
+
+/**
+ * OpenCV 命名空间（当前仅暴露 dnn 子模块）
+ */
+declare const cv: {
+    dnn: {
+        /**
+         * 读取 Caffe 网络
+         * @param prototxt prototxt 文件路径
+         * @param caffeModel caffemodel 文件路径（可选）
+         * @returns DNN 网络对象
+         */
+        readNetFromCaffe(prototxt: string, caffeModel?: string): DnnNet
+        /**
+         * 将图像转为 DNN 输入 blob
+         * @param image 输入图像 Mat
+         * @param scalefactor 缩放因子（默认 1.0）
+         * @param size 目标尺寸 [w, h]（默认 [0, 0]，保持原尺寸）
+         * @param mean 均值（默认 0）
+         * @param swapRB 是否交换 R/B 通道（默认 false）
+         * @param crop 是否裁剪（默认 false）
+         * @param ddepth blob 深度（默认 CV_32F）
+         * @returns 输出 blob Mat
+         */
+        blobFromImage(
+            image: Mat,
+            scalefactor?: number,
+            size?: [number, number],
+            mean?: number | [number, number, number] | [number, number, number, number],
+            swapRB?: boolean,
+            crop?: boolean,
+            ddepth?: number
+        ): Mat
+        /** 后端常量 */
+        DNN_BACKEND_DEFAULT: number
+        DNN_BACKEND_HALIDE: number
+        DNN_BACKEND_INFERENCE_ENGINE: number
+        DNN_BACKEND_OPENCV: number
+        DNN_BACKEND_CUDA: number
+        /** 目标常量 */
+        DNN_TARGET_CPU: number
+        DNN_TARGET_OPENCL: number
+        DNN_TARGET_OPENCL_FP16: number
+        DNN_TARGET_MYRIAD: number
+        DNN_TARGET_FPGA: number
+        DNN_TARGET_CUDA: number
+        DNN_TARGET_CUDA_FP16: number
+        DNN_TARGET_HDDL: number
+    }
+}
+
 /** 高精度计时器 */
 declare class Timer {
     /** 重置定时器 */
@@ -216,11 +316,18 @@ declare class Timer {
 
 /**
  * 鼠标点击操作
+ * @param button 按键类型（重载简写）：left/right/middle/x1/x2
+ */
+declare function mc(button: "left" | "right" | "middle" | "x1" | "x2" | "l" | "r" | "m"): void
+
+/**
+ * 鼠标点击操作
  * @param hwnd 窗口句柄 (为0表示前台)
  * @param x X坐标
  * @param y Y坐标
+ * @param button 按键类型（可选，默认 left）：left/right/middle/x1/x2
  */
-declare function mc(hwnd?: number, x?: number, y?: number): void
+declare function mc(hwnd?: number, x?: number, y?: number, button?: "left" | "right" | "middle" | "x1" | "x2" | "l" | "r" | "m"): void
 
 /**
  * 鼠标相对移动
@@ -251,19 +358,33 @@ declare function moveC(hwnd: number, x: number, y: number, duration?: number): P
 
 /**
  * 鼠标按下
+ * @param button 按键类型（重载简写）：left/right/middle/x1/x2
+ */
+declare function md(button: "left" | "right" | "middle" | "x1" | "x2" | "l" | "r" | "m"): void
+
+/**
+ * 鼠标按下
  * @param hwnd 窗口句柄 (为0表示前台)
  * @param x X坐标
  * @param y Y坐标
+ * @param button 按键类型（可选，默认 left）：left/right/middle/x1/x2
  */
-declare function md(hwnd?: number, x?: number, y?: number): void
+declare function md(hwnd?: number, x?: number, y?: number, button?: "left" | "right" | "middle" | "x1" | "x2" | "l" | "r" | "m"): void
+
+/**
+ * 鼠标抬起
+ * @param button 按键类型（重载简写）：left/right/middle/x1/x2
+ */
+declare function mu(button: "left" | "right" | "middle" | "x1" | "x2" | "l" | "r" | "m"): void
 
 /**
  * 鼠标抬起
  * @param hwnd 窗口句柄 (为0表示前台)
  * @param x X坐标
  * @param y Y坐标
+ * @param button 按键类型（可选，默认 left）：left/right/middle/x1/x2
  */
-declare function mu(hwnd?: number, x?: number, y?: number): void
+declare function mu(hwnd?: number, x?: number, y?: number, button?: "left" | "right" | "middle" | "x1" | "x2" | "l" | "r" | "m"): void
 
 /**
  * 鼠标中键点击
@@ -392,6 +513,11 @@ declare function isElevated(): boolean
 
 /**
  * 从窗口捕获图像Mat对象
+ *
+ * 注意：
+ * - `capture*` 系列默认会复用内部 Mat 缓存（固定内存区域），以降低内存占用与 GC 压力；
+ * - 连续调用后，之前返回的 Mat 内容可能被后一次捕获覆盖；
+ * - 若需要同时处理/保留两帧及以上，请先对旧帧执行 `clone()` 再进行下一次捕获。
  * @param hwnd 窗口句柄
  * @param x ROI 左上角 X（可选，相对客户区）
  * @param y ROI 左上角 Y（可选，相对客户区）
@@ -405,6 +531,11 @@ declare function captureWindow(hwnd: number, x?: number, y?: number, w?: number,
 
 /**
  * 从窗口捕获图像Mat对象（WGC优化版）
+ *
+ * 注意：
+ * - 默认会复用内部 Mat 缓存（固定内存区域）；
+ * - 连续调用后，之前返回的 Mat 内容可能被覆盖；
+ * - 若需要同时处理/保留两帧及以上，请先 `clone()`。
  * @param hwnd 窗口句柄
  * @param x ROI 左上角 X（可选，相对客户区）
  * @param y ROI 左上角 Y（可选，相对客户区）
@@ -466,6 +597,34 @@ declare function imreadUrlRgba(localPath: string, url: string): Mat
  * @throws 加载模板失败时抛出错误
  */
 declare function imreadUrl(localPath: string, url: string): Mat
+
+/**
+ * 下载文件（异步）
+ * @param url 下载地址
+ * @param filename 保存文件名或路径（相对路径会按脚本目录解析）
+ * @param force 是否强制覆盖下载，默认 false；当 false 且文件已存在时跳过下载
+ * @returns Promise<void>
+ * @throws 下载失败时抛出错误
+ */
+declare function downloadFile(url: string, filename: string, force?: boolean): Promise<void>
+
+/**
+ * 初始化 OCR 模块（自动下载缺失资源到本地）。
+ * @param localRootDir 本地资源目录（可选，默认使用程序数据目录）
+ * @param cdnBaseUrl CDN 根地址（可选，默认 https://cdn.dna-builder.cn/ocr）
+ * @param numThread 识别线程数（可选，默认 2）
+ * @returns 实际使用的本地资源目录
+ * @throws 初始化失败时抛出错误
+ */
+declare function initOcr(localRootDir?: string, cdnBaseUrl?: string, numThread?: number): string
+
+/**
+ * OCR 文字识别（输入 Mat，返回文本）。
+ * @param imgMat 图像 Mat（支持 1/3/4 通道）
+ * @returns 识别文本（失败或无结果时可能为空字符串）
+ * @throws OCR 未初始化或识别失败时抛出错误
+ */
+declare function ocrText(imgMat: Mat): string
 
 /**
  * 保存Mat对象到文件
@@ -536,6 +695,17 @@ declare function findColorAndMatchTemplate(
 declare function matchTemplate(imgMat: Mat, templateMat: Mat, tolerance: number): Promise<[number, number] | undefined>
 
 /**
+ * AHK 风格 DLL 动态调用
+ * 参数布局：dllCall(func, type1, value1, type2, value2, ..., returnType?)
+ * 注意: 如果你使用这个函数 你的脚本会被标记会高风险脚本
+ * @param func 函数地址(number) / 函数名(string) / 带 Ptr 属性的对象
+ * @param typeAndValue 类型与值交替参数；若总数为奇数，最后一个视为返回类型
+ * @returns 调用返回值（number/string/undefined）；`Type*` 参数可传 `{ value: ... }` 并在调用后回写 value
+ * @see https://wyagd001.github.io/v2/docs/lib/DllCall.htm
+ */
+declare function dllCall(func: number | string | { Ptr: number }, ...typeAndValue: any[]): number | string | undefined
+
+/**
  * 色键过滤并返回灰度二值图
  * @param mat 源图像 Mat
  * @param colors 色键数组（例如 [0xffffff, 0xff0000]）
@@ -548,10 +718,11 @@ declare function colorFilter(mat: Mat, colors: number[], tolerance: number): Mat
  * 使用 HSL 加权差进行色键过滤并返回灰度二值图
  * @param mat 源图像 Mat
  * @param colors 色键数组（例如 [0xffffff, 0xff0000]）
- * @param tolerance HSL 加权差容差，公式：abs(h1-h2) + abs(s1-s2)*180 + abs(l1-l2)*75
+ * @param tolerance HSL 加权差容差
+ * @param weights 可选权重 [h, s, l]，默认 [255, 180, 75]；例如 [0, 0, 1] 表示仅比较 L 通道
  * @returns 灰度二值图 Mat（命中为255，未命中为0）
  */
-declare function colorFilterHSL(mat: Mat, colors: number[], tolerance: number): Mat
+declare function colorFilterHSL(mat: Mat, colors: number[], tolerance: number, weights?: [number, number, number]): Mat
 
 /**
  * 色键匹配，返回匹配像素 mean 最大的颜色索引
@@ -609,11 +780,11 @@ declare function siftLocate(
 declare function perceptualHash(imgMat: Mat, color?: boolean): string
 
 /**
- * 计算图像 ORB 特征哈希
+ * 计算图像 ORB 特征字符串（压缩后的原始 ORB 描述子）
  * @param imgMat 图像 Mat
- * @returns 十六进制哈希字符串（固定 64 字符）
+ * @returns 特征字符串（纯 `base64`；解压后为 `[rows:u16][cols:u16][descriptor bytes...]`）
  */
-declare function orbFeatureHash(imgMat: Mat): string
+declare function orbFeature(imgMat: Mat): string
 
 /**
  * 预测图像旋转角度（适用于罗盘/圆盘类方向识别）
@@ -632,13 +803,13 @@ declare function predictRotation(imgMat: Mat): number
 declare function matchHammingHash(sourceHash: string, templateHashes: string[], maxDistance?: number): number
 
 /**
- * 比较 ORB 哈希与模板哈希数组，返回匹配索引
- * @param sourceHash 源图像 ORB 哈希（十六进制字符串，固定 64 字符）
- * @param templateHashes 模板 ORB 哈希数组（十六进制字符串数组）
- * @param maxDistance 最大允许汉明距离（默认 0，表示精确匹配）
+ * 比较 ORB 特征字符串与模板特征数组，返回匹配索引
+ * @param sourceFeature 源图像 ORB 特征（纯 `base64`；解压后为 `[rows:u16][cols:u16][descriptor bytes...]`）
+ * @param templateFeatures 模板 ORB 特征数组（纯 `base64`；解压后为 `[rows:u16][cols:u16][descriptor bytes...]`）
+ * @param minConfidence 最小置信度（0-1 或 0-100，默认 0）
  * @returns 匹配索引；未匹配返回 -1
  */
-declare function matchOrbHash(sourceHash: string, templateHashes: string[], maxDistance?: number): number
+declare function matchOrbFeature(sourceFeature: string, templateFeatures: string[], minConfidence?: number): number
 
 /**
  * 形态学图像处理
@@ -820,26 +991,32 @@ declare function readConfig<F extends ScriptConfigFormat>(
 declare function setProgramVolume(programName: string, volume: number): void
 
 /**
- * 智能寻路函数（基于双图深度估计）
+ * 双图深度预测结果
+ */
+interface PredictDepthResult {
+    /** 深度图（8位视差图，0 表示不可计算区域） */
+    depth: Mat
+    /** 障碍物掩码（0 表示可通行，255 表示障碍） */
+    obstacleMask: Mat
+    /** 可能的路径方向候选坐标（按“更深 + 面积更大”优先） */
+    directions: [number, number][]
+}
+
+/**
+ * 双图深度预测（并返回路径方向候选）
  * @param leftImage 左图（第一次截图）
  * @param rightImage 右图（移动后的第二次截图）
- * @param startX 起点X坐标
- * @param startY 起点Y坐标
- * @param endX 终点X坐标
- * @param endY 终点Y坐标
- * @param numDisp 视差搜索范围（必须是16的倍数，如160）
- * @param blockSize 匹配块大小（3-7）
- * @param strategy 绕行策略（"left"|"right"|"auto"）
- * @returns 路径点列表 [[x, y], ...]
+ * @param numDisp 视差搜索范围（必须是16的倍数，如160，默认160）
+ * @param blockSize 匹配块大小（3-7，默认5）
+ * @param minRegionArea 有效连通区域最小面积（像素，默认800）
+ * @param maxCandidates 最多返回的方向候选数量（默认3）
+ * @returns 深度图、障碍掩码和方向候选点
  */
-declare function findPath(
+declare function predictDepth(
     leftImage: Mat,
     rightImage: Mat,
-    startX: number,
-    startY: number,
-    endX: number,
-    endY: number,
-    numDisp: number,
-    blockSize: number,
-    strategy: "left" | "right" | "auto"
-): [number, number][]
+    numDisp?: number,
+    blockSize?: number,
+    minRegionArea?: number,
+    maxCandidates?: number
+): PredictDepthResult
