@@ -3,9 +3,9 @@
 // @name autofishv2
 // @description 自动钓鱼V2 自动转点 纯后台
 // @author pa
-// @version 2.0.1
+// @version 2.0.2
 // @category 其他
-// @date 2026/2/20 20:57:54
+// @date 2026/2/22 02:32:06
 // ==/UserScript==
 
 // 说明: 慎开联机 可能会挡住F键
@@ -115,11 +115,11 @@ async function checkPoolTime(name) {
         净界岛: [0, 1, 2],
         冰湖: [0, 1, 2],
         下水道: [0, 1, 2],
-        浮星埠: [0, 1, 2],
-        百年春: [0, 2],
-        潮声岩穴: [0, 1, 2],
-        枯荣阁: [0, 1, 2],
-        微茫市: [0, 2],
+        浮星埠: [1],
+        百年春: [2],
+        潮声岩穴: [2],
+        枯荣阁: [0],
+        微茫市: [2],
     }
     const timer = new Timer()
     let valid = false
@@ -141,7 +141,7 @@ async function checkPoolTime(name) {
         kb(hwnd, "esc")
         await sleep(800)
         mc(hwnd, 57, 417)
-        await adjustTime()
+        await adjustTime(["600", "1200", "2000"][currentAllowedTimes[0]])
         setStatus("fn", "checkPoolTime:after")
         mc(hwnd, 1397, 789)
         await sleep(100)
@@ -157,22 +157,47 @@ async function checkPoolTime(name) {
     }
 }
 
-async function adjustTime() {
+/** @param {Mat} roi  */
+function timeocr(roi) {
+    const chasharr = [
+        "e310e3b2e7b30d0c", // 0
+        "f0f06031b3b3b34c", // 1
+        "58b1e2d992a7ad28", // 2
+        "e550abba4583e92c", // 3
+        "886ef74c4f98924a", // 4
+        "4510efe165139f0e", // 5
+        "67b64f490d787822", // 6
+        "230bfb4b13a70d68", // 7
+        "e71c83b20db2e32c", // 8
+        "b09cdaa3d8f22d88", // 9
+        "b1b03a3a3ab1bae0", // :
+    ]
+    const filterd = colorFilter(roi, [0xffffff], 30)
+
+    // 分割图像
+    const bboxs = segmentChars(filterd, 1, 2)
+    const chars = bboxs.map(v => filterd.roi(...v))
+    const hashs = chars.map(v => perceptualHash(v))
+    // setStatus("chars", chars, hashs.join("|"))
+    return hashs
+        .map(v => matchHammingHash(v, chasharr, 20))
+        .filter(v => v >= 0 && v < 10) // 过滤:
+        .join("")
+}
+async function adjustTime(t = "600") {
     setStatus("fn", "adjustTime")
     const timer = new Timer()
     while (timer.elapsed() < 20e3) {
         const frame = captureWindowWGC(hwnd)
-        const roi = frame.roi(1395, 438, 127, 38)
-        const phash = perceptualHash(roi)
-        setStatus("time", roi, phash)
-
-        const is6 = matchHammingHash(phash, ["bd660d56e15621b8", "a976ad56e11621b8", "99f2ad2c711e42b8"], 10) >= 0
-        if (is6) {
+        const roi = frame.roi(1451, 436, 72, 42)
+        const timestr = timeocr(roi)
+        setStatus("time", roi, timestr)
+        if (timestr === t) {
             console.log("时间调整成功")
             return
         } else {
             wheel(hwnd, 1488, 454, -120)
-            await sleep(800)
+            await sleep(500)
         }
     }
 }
