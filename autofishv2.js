@@ -121,6 +121,9 @@ async function checkPoolTime(name) {
         枯荣阁: [0],
         微茫市: [2],
     }
+    currentAllowedTimes = pools[name]
+    currentPool = name
+    if (currentAllowedTimes.length === 3) return
     const timer = new Timer()
     let valid = false
     while (timer.elapsed() < 2e3) {
@@ -132,8 +135,6 @@ async function checkPoolTime(name) {
             break
         }
     }
-    currentAllowedTimes = pools[name]
-    currentPool = name
     if (!valid) {
         console.log(`${name}时间不符合设定: ${pools[name]}`)
         kb(hwnd, "esc")
@@ -243,19 +244,21 @@ async function waitTP(name) {
     setStatus("substate", `等待开始传送${name}`)
     await waitColor(hwnd, 100, 863, 0x000000, 10)
     setStatus("substate", `等待传送到达${name}`)
-    const result = await waitColor(hwnd, 130, 860, 0x8fd19e, 10, 60e3)
+    const result = await waitColor(hwnd, 130, 860, 0x8fd19e, 10, 60e3) // #8fd19e
     console.log(`${name}传送${result ? "成功" : "失败"}`)
     if (!result) return false
+    await sleep(1000)
+    await kb(hwnd, "a", 200)
     setStatus("substate", `往前走${name}`)
     kd(hwnd, "w")
-    if (await waitF()) {
+    if (await waitF(5e3)) {
         setStatus("substate")
         console.log(`${name}转点成功`)
         ku(hwnd, "w")
         do {
             kb(hwnd, "f")
             await sleep(1000)
-        } while (!(await waitColor(hwnd, 24, 22, 0xffffdc, 30)))
+        } while (!(await waitColor(hwnd, 24, 22, 0xffffdc, 30))) // #ffffdc
         return true
     }
     console.log(`${name}转点失败`)
@@ -360,6 +363,9 @@ async function checkFinish() {
     if (now && !currentAllowedTimes.includes(now.index)) {
         return "changeTime"
     }
+    if (!cc(frame, 51, 24, 0xffffff, 10)) {
+        await kb(hwnd, "space")
+    }
     const isNoLure = matchHammingHash(phash, ["a97a76369cc4e812"], 10) >= 0
     if (isNoLure) {
         console.log(`无鱼饵`)
@@ -420,9 +426,9 @@ async function fishLoop() {
     await sleep(1000)
 }
 
-async function waitF() {
+async function waitF(t = 15000) {
     const timer = new Timer()
-    while (timer.elapsed() < 5000) {
+    while (timer.elapsed() < t) {
         await sleep(50)
         const frame = captureWindowWGC(hwnd)
         const phash = perceptualHash(frame.roi(955, 442, 14, 16))
