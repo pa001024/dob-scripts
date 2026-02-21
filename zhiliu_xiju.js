@@ -107,7 +107,7 @@ function findColors(img, colors, names, threshold = 10, mode = "single") {
             })
         }
     }
-    for (const color of config.门顺序) {
+    for (const color of ["黄"]) {
         const match = matches.find(v => color === v.color)
         if (match) {
             setStatus(
@@ -259,7 +259,7 @@ function checkState(frame) {
                 if (cc(frame, 1533, 869, 0x000000, 10)) {
                     return "loading"
                 } else {
-                    return "nothing"
+                    return "unknown"
                 }
             }
         }
@@ -583,12 +583,6 @@ async function battleLoop(state) {
     while (checkStop()) {
         const state = checkState(frame)
         setStatus("state", state)
-        if (state === "buff") {
-            kb(hwnd, "esc")
-            mc(hwnd, 1456, 808)
-            await sleep(300)
-            continue
-        }
         if (state !== "boss") {
             await prepareSkill("q2")
         }
@@ -706,25 +700,9 @@ const ftimer = setInterval(async () => {
     frame = captureWindowWGC(hwnd)
     if (autoAimX || autoAimY) {
         const door = findFn(frame)
-        const mDoor = findDoorMinimap(frame)
         if (door) {
             drawBorder(hwnd, ...door.match.bbox)
-            if (mDoor && mDoor.match.color === door.match.color && mDoor.distance > 15) {
-                setStatus(
-                    "route",
-                    frame.roi(...mDoor.match.bbox),
-                    `小地图寻路${autoAimX ? "X" : ""}${autoAimY ? "Y" : ""}: ${~~mDoor.angle}°, ${~~mDoor.distance}m`
-                )
-                const roiMat = frame.roi(30, 35, 180, 180)
-                const rotation = predictRotation(roiMat)
-                const delta = ((rotation - mDoor.angle + 180) % 360) - 180
-                if (delta > 30) {
-                    turn(-Math.sign(delta) * Math.max(Math.abs(delta), 1))
-                    return
-                }
-                gameState.angle = mDoor.angle
-                gameState.distance = mDoor.distance
-            } else {
+            {
                 const numroi = frame.roi(door.match.bbox[0] - 10, door.match.bbox[1] + door.match.bbox[3] + 7, 30, 15)
                 const d = +numocr(numroi)
                 if (d) {
@@ -748,7 +726,7 @@ const ftimer = setInterval(async () => {
             mm(autoAimX ? fastX : 0, autoAimY ? fastY : 0)
         } else {
             gameState.distance = 0
-            turn(15)
+            turn(3)
         }
     } else {
         setStatus("route")

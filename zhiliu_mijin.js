@@ -794,7 +794,7 @@ function numocr(roi) {
         .join("")
 }
 
-const ftimer = setInterval(async () => {
+const ftimer = setInterval(() => {
     if (!checkStop()) clearInterval(ftimer)
     frame = captureWindowWGC(hwnd)
     if (autoAimX || autoAimY) {
@@ -867,6 +867,7 @@ function checkF() {
 }
 
 async function main() {
+    setForegroundWindow(hwnd)
     await sleep(100)
     await moveTo(hwnd, 200, 1, 100)
     mc()
