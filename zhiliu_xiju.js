@@ -8,12 +8,15 @@
 // @date 2026/2/22 20:04:07
 // ==/UserScript==
 
-// 止流带专武猎魂雷月卡/球球蜂
+// 止流带专武裂魂雷月卡/球球蜂
 // 队友扶疏黎瑟
 // 进去再开 不识别外面的界面
 
 const config = {
     useQ1: readConfig("搓BUFF", "Boss阶段是否释放Q1（6命别选）", "boolean", false),
+    useQ1B: readConfig("小怪层搓BUFF", "小怪阶段是否释放Q1（6命别选）", "boolean", false),
+    onlyL1: readConfig("LV1", "仅第一层寻路", "boolean", true),
+    preBuff: readConfig("2+层提前Q", "需勾选LV1才生效", "boolean", true),
     /** @type {ROI} */ mainLoc: [290, 169, 1020, 514],
 }
 
@@ -24,6 +27,7 @@ checkSize(hwnd)
 let frame = captureWindowWGC(hwnd)
 let autoAimX = false
 let autoAimY = false
+let isFirstMap = true
 const autoAimoffsetY = -100
 const gameState = {
     dx: 0,
@@ -152,8 +156,8 @@ async function prepareSkill(skill) {
     /** @param {"long" | "short"} type 长E或短E */
     async function useSkillEAndCheck(type) {
         // console.log(`useSkillEAndCheck(${type})`)
-        await kb(hwnd, "e", type === "long" ? 800 : 10)
-        await sleep(type === "long" ? 1500 : 400)
+        await kb(hwnd, "e", type === "long" ? 600 : 10)
+        await sleep(type === "long" ? 600 : 300)
         // 更新画面
         currentSkill = checkSkill(frame)
     }
@@ -192,28 +196,28 @@ async function useSkill(skill) {
         case "q1":
             if (currentSkill === 1) {
                 await kb(hwnd, "q", 10)
-                await sleep(2000)
+                await sleep(1000)
                 return true
             }
             break
         case "q2":
             if (currentSkill === 2) {
                 await kb(hwnd, "q", 10)
-                await sleep(4000)
+                await sleep(3300)
                 return true
             }
             break
         case "Q2":
             if (currentSkill === 2) {
                 await kb(hwnd, "q", 500)
-                await sleep(4000)
+                await sleep(3300)
                 return true
             }
             break
         case "q3":
             if (currentSkill === 3) {
                 await kb(hwnd, "q", 10)
-                await sleep(2000)
+                await sleep(1600)
                 return true
             }
             break
@@ -391,11 +395,13 @@ async function moveLoop(type = "door") {
         setStatus("state", state)
         if (state !== type) {
             ku(hwnd, "w")
+            isFirstMap = false
             setStatus("err")
             return
         }
         if (await checkFinish()) {
             ku(hwnd, "w")
+            isFirstMap = false
             setStatus("err")
             return
         }
@@ -421,7 +427,7 @@ async function moveLoop(type = "door") {
             await waitF(500)
             ku(hwnd, "w")
         }
-        if (totalTimeout.elapsed() > 13e3) {
+        if (totalTimeout.elapsed() > 20e3) {
             autoAimX = false
             console.log("移动超时")
             await resetLoop()
@@ -444,7 +450,7 @@ async function battleLoop(state) {
     await kb(hwnd, "w", 30)
     await useSkill("q2")
     await useSkill("z")
-    if (state === "boss" && config.useQ1) {
+    if (state === "boss" ? config.useQ1 : config.useQ1B) {
         await useSkill("q1")
     }
     while (checkStop()) {
@@ -472,7 +478,7 @@ async function battleLoop(state) {
         if (frame.get_hsl(794, 821)[2] < 0.8) {
             await useSkill("q2")
             await useSkill("z")
-            if (state === "boss" && config.useQ1) {
+            if (state === "boss" ? config.useQ1 : config.useQ1B) {
                 await useSkill("q1")
             }
             timer.reset()
@@ -602,7 +608,11 @@ async function main() {
         switch (state) {
             case "pre":
                 i = 0
-                await moveLoop(state)
+                if (isFirstMap || !config.onlyL1) await moveLoop(state)
+                else if (config.preBuff) {
+                    if (config.useQ1B) await useSkill("q1")
+                    await useSkill("q2")
+                }
                 break
             case "battle":
             case "boss":
@@ -610,6 +620,7 @@ async function main() {
                 await battleLoop(state)
                 break
             case "finish": {
+                isFirstMap = true
                 const secs = timer.elapsed() / 1e3
                 timer.reset()
                 console.info(`完成 ${++finished}次 用时 ${~~(secs / 60)}分${~~(secs % 60)}秒`)

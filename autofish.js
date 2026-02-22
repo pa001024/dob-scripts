@@ -17,7 +17,8 @@ async function main() {
     // setForegroundWindow(hwnd)
     await sleep(80)
     while (hwnd) {
-        mc(hwnd, 1424, 753)
+        mc(hwnd, 1444, 779)
+        mc(hwnd, 1504, 794)
         await sleep(80)
     }
     console.log("结束钓鱼")

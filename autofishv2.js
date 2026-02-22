@@ -38,6 +38,7 @@ const config = {
         },
         ["好翅爱吃", "同类相吸", "蚓鱼上钩", "通用鱼饵"]
     ),
+    debug: false, // 不实际钓鱼
 }
 
 const hwnd = getWindowByProcessName("EM-Win64-Shipping.exe")
@@ -87,6 +88,7 @@ async function changePool(name) {
         枯荣阁: [2, 3],
         微茫市: [2, 4],
     }
+    currentPool = name
     setStatus("state", `转点(${name})`)
     setStatus("substate", `开始选点`)
     const pool = pools[name]
@@ -122,7 +124,6 @@ async function checkPoolTime(name) {
         微茫市: [2],
     }
     currentAllowedTimes = pools[name]
-    currentPool = name
     if (currentAllowedTimes.length === 3) return
     const timer = new Timer()
     let valid = false
@@ -248,7 +249,7 @@ async function waitTP(name) {
     console.log(`${name}传送${result ? "成功" : "失败"}`)
     if (!result) return false
     await sleep(1000)
-    await kb(hwnd, "a", 200)
+    if (currentPool === "冰湖") await kb(hwnd, "a", 200)
     setStatus("substate", `往前走${name}`)
     kd(hwnd, "w")
     if (await waitF(5e3)) {
@@ -349,10 +350,12 @@ async function checkLure() {
     kb(hwnd, "esc")
     await sleep(500)
     console.log(`鱼饵自动更换为 ${selected.name} (${selected.stock}个)`)
+    await sleep(1000)
 }
 
 let currentAllowedTimes = [0, 1, 2]
 let currentPool = "枯荣阁"
+const fishTimeout = new Timer()
 async function checkFinish() {
     const frame = captureWindowWGC(hwnd)
     const roi = frame.roi(746, 286, 105, 18)
@@ -360,8 +363,16 @@ async function checkFinish() {
     const phash = perceptualHash(filterd)
     setStatus("finish", filterd, phash)
     const now = identifyTime(frame)
-    if (now && !currentAllowedTimes.includes(now.index)) {
-        return "changeTime"
+    if (now) {
+        if (now.locate === "fishing" && fishTimeout.elapsed() > 10e3) {
+            console.log(`咬钩超时`)
+            kb(hwnd, "space") // 最后一条鱼超时
+        }
+        if (!currentAllowedTimes.includes(now.index)) {
+            return "changeTime"
+        }
+    } else {
+        fishTimeout.reset()
     }
     if (!cc(frame, 51, 24, 0xffffff, 10)) {
         await kb(hwnd, "space")
@@ -381,6 +392,7 @@ async function checkFinish() {
             break
         }
     }
+    if (config.debug) return "finish"
     return found ? "finish" : ""
 }
 
@@ -389,6 +401,7 @@ async function fishLoop() {
     setStatus("fn", "fishLoop")
     let finished = false
     let changeTime = false
+    fishTimeout.reset()
     const timer = setInterval(async () => {
         const reason = await checkFinish()
         if (reason === "finish") {
@@ -414,12 +427,10 @@ async function fishLoop() {
     while (true) {
         await sleep(500)
         const frame = captureWindowWGC(hwnd)
-        const time = identifyTime(frame)
-        if (time && time.locate === "fishing") {
-            console.log("esc 退出钓鱼")
+        if (cc(frame, 51, 27, 0xffffff, 10)) {
             kb(hwnd, "esc")
             await sleep(2000)
-        } else if (time) {
+        } else {
             break
         }
     }
@@ -444,7 +455,7 @@ async function main() {
     // 检查是否已经在钓鱼界面
     const frame = captureWindowWGC(hwnd)
     const time = identifyTime(frame)
-    if (time) {
+    if (time || cc(frame, 51, 27, 0xffffff, 10)) {
         await fishLoop()
     } else {
         if (config.startPoint) {
