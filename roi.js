@@ -5,7 +5,7 @@
 // @author pa
 // @version 1.0.0
 // @category 开发工具
-// @date 2026/2/22 05:20:54
+// @date 2026/2/22 18:00:47
 // ==/UserScript==
 
 const hwnd = getWindowByProcessName("EM-Win64-Shipping.exe")
@@ -21,7 +21,7 @@ async function main() {
     const result = await selectroi("roi", frame)
     if (!result) return
     let roi = frame.roi(...result)
-    if (pre === "滤色") roi = colorFilter(roi, [+color], 10)
+    if (pre === "滤色") roi = colorFilter(roi, [+color], 20)
     const phash = perceptualHash(roi)
     setStatus("roi", roi, `frame.roi(${result.join(",")})`)
     setStatus("phash", phash)

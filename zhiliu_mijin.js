@@ -634,7 +634,7 @@ async function moveLoop(type = "door") {
             autoAimY = true
             await sleep(300)
             autoAimY = false
-            mt()
+            mt(hwnd)
             await sleep(33)
             mc(hwnd)
             await sleep(33)
@@ -665,7 +665,7 @@ async function battleLoop(state) {
     setStatus("fn", "battleLoop")
     ku(hwnd, "w")
     const timer = new Timer()
-    mt() // 锁定BOSS
+    mt(hwnd) // 锁定BOSS
     await sleep(300)
     await kb(hwnd, "w", 30)
     await useSkill("q2")

@@ -1,34 +1,30 @@
 // ==UserScript==
-// @id JYVs5DxWME
+// @id pF1ssKWk3X
 // @name zhiliu_xiju
-// @description 止流戏剧测试版
+// @description 止流戏剧 后台
 // @author pa
 // @version 1.0.0
 // @category 其他
-// @date 2026/2/21 04:43:23
+// @date 2026/2/22 20:04:07
 // ==/UserScript==
 
-// 说明: 视角设置全默认(!!!!) 视距1.3
 // 止流带专武猎魂雷月卡/球球蜂
 // 队友扶疏黎瑟
+// 进去再开 不识别外面的界面
 
 const config = {
-    useQ1: readConfig("搓BUFF", "Boss阶段是否释放Q1（6命别选）", "boolean", false), // 6命别选
+    useQ1: readConfig("搓BUFF", "Boss阶段是否释放Q1（6命别选）", "boolean", false),
     /** @type {ROI} */ mainLoc: [290, 169, 1020, 514],
 }
 
 const hwnd = getWindowByProcessName("EM-Win64-Shipping.exe")
-if (!hwnd || !isElevated()) {
-    console.log("未找到窗口或非管理员权限")
-    throw new Error("未找到窗口或非管理员权限")
-}
+if (!hwnd || !isElevated()) throw new Error("未找到窗口或非管理员权限")
 checkSize(hwnd)
 
 let frame = captureWindowWGC(hwnd)
 let autoAimX = false
 let autoAimY = false
 const autoAimoffsetY = -100
-let findFn = findYellow
 const gameState = {
     dx: 0,
     dy: 0,
@@ -75,29 +71,24 @@ function checkSkill(img) {
  * @param {number[]} colors 颜色数组
  * @param {string[]} names 颜色名称数组
  */
-function findColors(img, colors, names, threshold = 10, mode = "single") {
-    // x: 290~1312 y: 168~681
+function findColors(img, colors, names, threshold = 10) {
     const xOffset = config.mainLoc[0]
     const yOffset = config.mainLoc[1]
     const roi = img.roi(...config.mainLoc)
     const filtered = colorFilter(roi, colors, threshold)
     const closed = morphologyEx(filtered, "close", 4)
-    // imshow("filtered", closed)
     const contours = findContours(closed, 100).filter(c => c.area < 420 && c.bbox[2] < 28 && c.bbox[3] < 28)
-    // const ccc = drawContours(closed, contours)
-    // imshow("contours", ccc)
     /** @type {{center: [number, number], bbox: [number, number, number, number], color: string, door: Mat}[]} */
     const matches = []
     for (const c of contours) {
         const door = roi.roi(...c.bbox)
-        const match = mode === "single" ? colorKeyMatch(door, colors, 50, 10) : 0
-        let color = names[match]
-        {
-            const x = ~~(door.cols() / 2)
-            const y = ~~(door.rows() / 2)
-            color = color === "红" ? (cc(door, x, y, 0xeb3a43, 40) ? "大红" : "小红") : color
-            // setStatus(`doorC${i}`, `color:${color} x:${x}, y:${y}, c:${door.get_rgb(x, y)?.toString(16).padStart(6, "0")}`)
+        let match = -1
+        const doorf = colorFilter(door, [0xffffc5], 20)
+        const chars = segmentChars(doorf).map(v => doorf.roi(...v))
+        if (chars.some(v => matchHammingHash(perceptualHash(v), ["4bccf9360638d998"]) >= 0)) {
+            match = 0
         }
+        const color = names[match]
         if (match !== -1) {
             matches.push({
                 center: [c.center[0] + xOffset, c.center[1] + yOffset],
@@ -143,7 +134,7 @@ function findColors(img, colors, names, threshold = 10, mode = "single") {
  */
 function findYellow(img) {
     // 滤色 : #FFD984 #C28334 #F0E084
-    return findColors(img, [0xffd984, 0xc28334, 0xf0e084], ["黄", "黄", "黄"], 20, "multi")
+    return findColors(img, [0xffd984, 0xc28334, 0xf0e084], ["黄", "黄", "黄"], 20)
 }
 
 /** @param {number} deg */
@@ -228,15 +219,6 @@ async function useSkill(skill) {
             break
     }
 }
-async function doge(boss = false) {
-    // 原地二段跳
-    if (boss) kd(hwnd, "a")
-    await kb(hwnd, "space", 100)
-    await sleep(500)
-    await kb(hwnd, "space", 100)
-    await sleep(500)
-    if (boss) ku(hwnd, "a")
-}
 
 /**
  * 检查状态
@@ -246,135 +228,79 @@ function checkState(frame) {
     if (cc(frame, 46, 274, 0xffffc2, 30)) {
         return "pre"
     } else {
-        if (cc(frame, 25, 25, 0xfff6b4, 10)) {
-            return "menu"
-        } else {
-            if (cc(frame, 44, 276, 0xeb3a43, 10)) {
-                if (cc(frame, 525, 63, 0x000000, 10)) {
-                    return "boss"
-                } else {
-                    return "battle"
-                }
+        if (cc(frame, 44, 276, 0xeb3a43, 10)) {
+            if (cc(frame, 525, 63, 0x000000, 10)) {
+                return "boss"
             } else {
-                if (cc(frame, 1533, 869, 0x000000, 10)) {
-                    return "loading"
+                return "battle"
+            }
+        } else {
+            if (cc(frame, 25, 25, 0xfff6b4, 10)) {
+                return "menu"
+            } else {
+                if (cc(frame, 1059, 841, 0xe1b454, 10)) {
+                    return "finish"
                 } else {
-                    return "unknown"
+                    if (cc(frame, 1533, 869, 0x000000, 10)) {
+                        return "loading"
+                    } else {
+                        return "unknown"
+                    }
                 }
             }
         }
     }
 }
 
-/** 检查地图 @param {Mat} frame */
+/** @param {Mat} frame  */
 function checkMap(frame) {
     const points = [
-        cc(frame, 75, 104, 0x0a0b0a, 10),
-        cc(frame, 101, 110, 0x0a0b0a, 10),
-        cc(frame, 125, 137, 0x0a0b0a, 10),
-        cc(frame, 125, 163, 0x0a0b0a, 10),
-        cc(frame, 137, 116, 0x0a0b0a, 10),
-        cc(frame, 74, 146, 0x0a0b0a, 10),
-        cc(frame, 95, 137, 0x0a0b0a, 10),
-        cc(frame, 162, 141, 0x0a0b0a, 10),
-        cc(frame, 143, 130, 0x0a0b0a, 10),
-        cc(frame, 57, 156, 0x0a0b0a, 10),
-        cc(frame, 94, 183, 0x0a0b0a, 10),
+        cc(frame, 108, 122, 0x080908, 10),
+        cc(frame, 103, 136, 0x080908, 10),
+        cc(frame, 132, 134, 0x080908, 10),
+        cc(frame, 68, 154, 0x080908, 10),
+        cc(frame, 113, 61, 0x080908, 10),
+        cc(frame, 170, 112, 0x080908, 10),
     ]
-        .map(v => (v ? "1" : "0"))
+        .map(b => (b ? "1" : "0"))
         .join("")
-    /** @param {string} points  */
-    function getMap(points) {
-        switch (points) {
-            case "01110000010":
-            case "11110000010":
-            case "11111000010":
-            case "10101000110":
-            case "11101000110":
-            case "11110000000":
-            case "11110000011":
-            case "11101000000":
-            case "11100000110":
-            case "11110000110":
-            case "11111000000":
-                return "zuoguai"
-            case "00000111001":
-                return "paotai_reset" // 炮台背面
-            case "00010111011":
-            case "00010111111":
-                return "paotai" // 炮台正面
-            case "00000000011":
-                return "bossfang"
-            default:
-                return points.startsWith("1111") ? "maybe" : "unknown"
-        }
+    if (points === "111000") {
+        return "left"
+    } else {
+        return "other"
     }
-    const state = getMap(points)
-    setStatus("map", `${state}: ${points}`)
-    // console.log(`${state}: ${points}`)
-    return state
 }
+
 /**
  * 转视角
  * @param {number} angle 角度
  */
-function turn(angle) {
-    mm((2057 * angle) / 360, 0)
-}
-
-/**
- * 转视角到绝对角度
- * @param {number} angle 角度
- * @param {Mat} [frame] 窗口截图
- */
-async function turnAbs(angle, frame) {
-    if (!frame) {
-        frame = captureWindowWGC(hwnd)
+async function turn(angle) {
+    /** @type {{[key: string]: KeyEnum[]}} */
+    const turnKeyMap = {
+        "-180": ["s"],
+        "-135": ["s", "a"],
+        "-90": ["a"],
+        "-45": ["w", "a"],
+        45: ["w", "d"],
+        90: ["d"],
+        135: ["s", "d"],
+        180: ["s"],
     }
-    const roiMat = frame.roi(30, 35, 180, 180)
-    const rotation = predictRotation(roiMat)
-    const delta = ((rotation - angle + 180) % 360) - 180
-    if (rotation === angle) return
-    turn(-Math.sign(delta) * Math.max(Math.abs(delta), 1))
-}
-
-/**
- * 快速移动
- * @param {number} [angle] 角度
- * @param {number} [distance] 距离
- */
-async function fastMove(angle, distance) {
-    setStatus("fn", "fastMove")
-    if (angle !== undefined) await turnAbs(angle)
-    if (distance === undefined || distance > 15) {
-        await rollAbs(-50)
-        await sleep(33)
-        await kb(hwnd, "4", 33)
-        await sleep(500)
-        await kb(hwnd, "space")
-        await sleep(300)
-        mt()
-        mc(hwnd) // 下落攻击
-    } else {
-        kd(hwnd, "w")
-        await sleep(33)
-        if (distance > 4) await kb(hwnd, "shift")
-        await sleep(500 + distance * 300)
-        ku(hwnd, "w")
+    /** @param {KeyEnum[]} keys @param {number} duration */
+    async function tapTurnKeys(keys, duration = 70) {
+        for (const key of keys) kd(hwnd, key)
+        await sleep(duration)
+        for (let i = keys.length - 1; i >= 0; i--) ku(hwnd, keys[i])
     }
-}
-
-/**
- * 转视角到绝对俯仰角
- * @param {number} angle 角度
- */
-async function rollAbs(angle) {
-    for (let i = 0; i < 12; i++) {
-        mm(0, 100) // 视角重置
-        await sleep(5)
-    }
-    await sleep(50)
-    mm(0, (-700 * (-angle + 90)) / 90) // 抬头
+    const key = turnKeyMap[`${angle}`]
+    if (!key) return
+    await tapTurnKeys(key)
+    await sleep(16)
+    mt(hwnd)
+    await sleep(300)
+    mt(hwnd)
+    await sleep(300)
 }
 
 const autoAimCalib = {
@@ -402,19 +328,21 @@ const autoAimModel = (() => {
     }
 })()
 
-/** @param {number} v @param {number} min @param {number} max */
-function clamp(v, min, max) {
-    return Math.max(min, Math.min(max, v))
-}
-
 /**
  * 屏幕投影偏移 -> 摄像机角度 -> mm参数
  * @param {number} dx
  * @param {number} dy
+ * @param {{out?: boolean, rawDy?: number}} [opts]
  */
-function projectOffsetToMm(dx, dy) {
-    const yawDeg = (Math.atan(dx / autoAimModel.fx) * 180) / Math.PI
+function projectOffsetToMm(dx, dy, opts = {}) {
+    let yawDeg = (Math.atan(dx / autoAimModel.fx) * 180) / Math.PI
     const pitchDeg = (Math.atan(dy / autoAimModel.fy) * 180) / Math.PI
+    if (opts.out && opts.rawDy) {
+        // 边缘点会被压在椭圆上，使用 dx + 椭圆修正后的 dy 计算平面方向角。
+        const rawDy = Number.isFinite(opts.rawDy) ? opts.rawDy : dy
+        const dyi = (rawDy * 496) / 239
+        yawDeg = (Math.atan2(dx, -dyi) * 180) / Math.PI
+    }
     return {
         yawDeg,
         pitchDeg,
@@ -423,8 +351,6 @@ function projectOffsetToMm(dx, dy) {
     }
 }
 
-let isPaopai = false
-let resetFlag = false
 /**
  * 自动寻路
  */
@@ -433,7 +359,6 @@ async function moveLoop(type = "door") {
     async function checkFinish() {
         const state = checkState(frame)
         if (state === "battle" || state === "boss") {
-            resetFlag = false
             autoAimX = false
             return true
         }
@@ -441,82 +366,27 @@ async function moveLoop(type = "door") {
             autoAimX = false
             await kb(hwnd, "f", 33)
             await sleep(1000)
-            resetFlag = false
             return true
         }
         return false
     }
-    if (isPaopai) {
-        await resetLoop()
-        await sleep(1000)
-        isPaopai = false
-        return
-    }
-    let map = checkMap(frame)
-    for (let i = 0; i < 10; i++) {
-        await sleep(1000)
-        // 多等待几帧 等地图稳定
-        const newmap = checkMap(frame)
-        if (newmap === map) break
-        map = newmap
-    }
-    if (map === "maybe") {
-        await resetLoop()
-        await sleep(1000)
-        map = checkMap(frame)
-    }
+    const map = checkMap(frame)
+    setStatus("map", map)
     switch (map) {
-        case "zuoguai":
-            await fastMove()
-            await sleep(700)
-            kd(hwnd, "w")
-            await sleep(200)
-            kb(hwnd, "shift", 33)
+        case "left":
+            mt(hwnd)
+            await sleep(400)
+            kb(hwnd, "4")
             await sleep(300)
-            ku(hwnd, "w")
-            turn(-90)
-            await fastMove()
-            await sleep(500)
-            break
-        case "paotai_reset":
-            if (!cc(frame, 219, 321, 0xffffb4, 10) && resetFlag) {
-                kd(hwnd, "d")
-                kb(hwnd, "w", 700)
-                await sleep(800)
-                ku(hwnd, "d")
-                isPaopai = true
-                resetFlag = false
-            }
-            break
-        case "paotai":
-            if (!cc(frame, 219, 321, 0xffffb4, 10)) {
-                await kb(hwnd, "a", 1500)
-                frame = captureWindowWGC(hwnd)
-                if (await checkFinish()) {
-                    setStatus("err")
-                    return
-                }
-                await kb(hwnd, "w", 700)
-                isPaopai = true
-                frame = captureWindowWGC(hwnd)
-                if (await checkFinish()) {
-                    setStatus("err")
-                }
-                return
-            }
-            break
-        case "bossfang":
-            turn(-15)
-            await fastMove()
-            await sleep(700)
-            turn(-15)
-            await fastMove()
-            await sleep(700)
+            kb(hwnd, "space")
+            await sleep(300)
+            mc(hwnd)
+            await sleep(1000)
             break
     }
     const totalTimeout = new Timer()
     let state = checkState(frame)
-    while (checkStop() && (state === "event" || state === "door")) {
+    while (checkStop() && state === "pre") {
         state = checkState(frame)
         setStatus("state", state)
         if (state !== type) {
@@ -534,14 +404,12 @@ async function moveLoop(type = "door") {
         // 远距离移动
         if (gameState.distance > 20 || (gameState.distance > 10 && gameState.dy < -30) || gameState.dy < -220) {
             autoAimX = false
-            await rollAbs(gameState.distance > 16 ? -60 : gameState.distance > 12 ? -30 : -10)
             kb(hwnd, "4")
             await sleep(500)
-            await rollAbs(0)
             autoAimY = true
             await sleep(300)
             autoAimY = false
-            mt()
+            mt(hwnd)
             await sleep(33)
             mc(hwnd)
             await sleep(33)
@@ -557,7 +425,6 @@ async function moveLoop(type = "door") {
             autoAimX = false
             console.log("移动超时")
             await resetLoop()
-            resetFlag = true
             return
         }
         await sleep(10)
@@ -572,7 +439,7 @@ async function battleLoop(state) {
     setStatus("fn", "battleLoop")
     ku(hwnd, "w")
     const timer = new Timer()
-    mt() // 锁定BOSS
+    mt(hwnd) // 锁定BOSS
     await sleep(300)
     await kb(hwnd, "w", 30)
     await useSkill("q2")
@@ -601,7 +468,6 @@ async function battleLoop(state) {
                 await useSkill("q3")
             }
         }
-        await doge(state === "boss")
         await sleep(100)
         if (frame.get_hsl(794, 821)[2] < 0.8) {
             await useSkill("q2")
@@ -632,37 +498,18 @@ async function resetLoop(skip = false) {
     kb(hwnd, "esc", 33)
     await sleep(800)
     if (!skip) {
-        await moveC(hwnd, 1115, 820, 300)
+        mc(hwnd, 1115, 820)
         await sleep(500)
-        await moveC(hwnd, 563, 28, 500)
-        await moveC(hwnd, 1014, 380, 500)
+        mc(hwnd, 563, 28)
+        await sleep(200)
+        mc(hwnd, 1014, 380)
         await sleep(200)
         mc(hwnd, 1010, 379)
     }
-    await moveC(hwnd, 999, 506, 100)
+    mc(hwnd, 999, 506)
     await sleep(500)
     mt(hwnd)
     await sleep(500)
-}
-
-const rewardTpl = getTemplateB64(
-    "iVBORw0KGgoAAAANSUhEUgAAABYAAAAYCAIAAABx3JocAAABX0lEQVQ4EdVSMaqDQBRcQ9BlW1P8zQWCHkCwtZAsiBZBco29SDohl8gFUn9IZy4QLSzS2IgQLGzeJ/qzoq7E3+VPs8PMvNnHsgh9KFzXXa1W0uUcx1mv11KrE6MoggabzaZTG3Y8HlvrTcvtdmtzj8dD13XREoZhqwOAbdtCl5DtdiuiSZKIhBDzPMcYC32ScM7jOK6qKggC3/ev12tRFOfzmTGmKMrkGCEEN9A0TVXVNpdlGQDs93uEECFksVgsl8s2RgjpdZmmKVadT0zT7FoMw5BOlmXJGKvrWuoahvGmIsuyNoExrqpq3NKroJTe+7hcLpqmiUt0XU/TtB+5U0pF4ElUVaWUfr0w/qAv53lSSsWTdy2MscGqvu8L+3A4DFzGmHB/ied5gxAA7HY7RVFOp9PY8jxvVgUAlGU5ngeAP1RI5z+5wrKsqZ2lumVZw+dECHHOv+eBcy6Z/+fSDw4xX94zihE4AAAAAElFTkSuQmCC"
-)
-/**
- * 选择商店选项
- */
-async function selectShopOption() {
-    setStatus("fn", "selectShopOption")
-    const offsetX = 930
-    const offsetY = 430
-    const roi = frame.roi(offsetX, offsetY, 43, 268)
-    const match = await matchTemplate(roi, rewardTpl, 0.8)
-    if (match) {
-        mc(hwnd, offsetX + match[0] + 10, offsetY + match[1] + 10)
-    } else {
-        mc(hwnd, 1022, 696)
-    }
-    await sleep(100)
 }
 
 const xtimer = setInterval(async () => {
@@ -699,34 +546,25 @@ const ftimer = setInterval(async () => {
     if (!checkStop()) clearInterval(ftimer)
     frame = captureWindowWGC(hwnd)
     if (autoAimX || autoAimY) {
-        const door = findFn(frame)
+        const door = findYellow(frame)
         if (door) {
             drawBorder(hwnd, ...door.match.bbox)
-            {
-                const numroi = frame.roi(door.match.bbox[0] - 10, door.match.bbox[1] + door.match.bbox[3] + 7, 30, 15)
-                const d = +numocr(numroi)
-                if (d) {
-                    setStatus("d", numroi, d)
-                } else {
-                    setStatus("d")
-                }
-                gameState.distance = Number.isFinite(d) ? d : 0
-                setStatus(
-                    "route",
-                    `传统寻路${autoAimX ? "X" : ""}${autoAimY ? "Y" : ""}: ${~~door.dx}, ${~~door.dy}, ${gameState.distance}m`
-                )
+            const numroi = frame.roi(door.match.bbox[0] - 10, door.match.bbox[1] + door.match.bbox[3] + 7, 30, 15)
+            const d = +numocr(numroi)
+            if (d) {
+                setStatus("d", numroi, d)
+            } else {
+                setStatus("d")
             }
-            const first = projectOffsetToMm(door.dx, door.dy + autoAimoffsetY)
-            let fastX = clamp(first.mmx, -320, 320)
-            let fastY = clamp(first.mmy, -320, 320)
-            if (Math.abs(fastX) < 5) fastX = 0
-            if (Math.abs(fastY) < 5) fastY = 0
-            gameState.dx = first.mmx
-            gameState.dy = first.mmy
-            mm(autoAimX ? fastX : 0, autoAimY ? fastY : 0)
+            gameState.distance = Number.isFinite(d) ? d : 0
+            setStatus("route", `传统寻路${autoAimX ? "X" : ""}${autoAimY ? "Y" : ""}: ${~~door.dx}, ${~~door.dy}, ${gameState.distance}m`)
+            const first = projectOffsetToMm(door.dx, door.dy + autoAimoffsetY, { out: door.out, rawDy: door.dy })
+            setStatus("yawDeg", first.yawDeg)
+            if (Math.abs(first.yawDeg) > 40) {
+                turn(45 * Math.sign(first.yawDeg))
+            }
         } else {
             gameState.distance = 0
-            turn(3)
         }
     } else {
         setStatus("route")
@@ -753,9 +591,6 @@ function checkF() {
 
 async function main() {
     await sleep(100)
-    await moveTo(hwnd, 1, 1, 100)
-    mc()
-    await sleep(100)
 
     let i = 0
     let finished = 0
@@ -765,51 +600,29 @@ async function main() {
         setStatus("state", state)
         autoAimX = false
         switch (state) {
-            case "door":
-            case "event":
+            case "pre":
                 i = 0
-                findFn = state === "door" ? findDoor : findYellow
                 await moveLoop(state)
-                break
-            case "paotai":
-                i = 0
-                await resetLoop(true)
                 break
             case "battle":
             case "boss":
                 i = 0
                 await battleLoop(state)
                 break
-            case "shop":
-                i = 0
-                await selectShopOption()
-                kd(hwnd, "space")
-                await sleep(1000)
-                ku(hwnd, "space")
-                break
-            case "esc":
-                i = 0
-                kb(hwnd, "esc")
-                await sleep(1000)
-                break
-            case "dead":
-                i = 0
-                kb(hwnd, "x")
-                await sleep(1000)
-                break
-            case "buff":
-                i = 0
-                mc(hwnd, 1456, 808)
-                await sleep(300)
-                break
             case "finish": {
                 const secs = timer.elapsed() / 1e3
                 timer.reset()
                 console.info(`完成 ${++finished}次 用时 ${~~(secs / 60)}分${~~(secs % 60)}秒`)
-                mc(hwnd)
+                mc(hwnd, 1476, 846)
                 await sleep(1500)
                 break
             }
+            case "loading":
+                break
+            case "menu":
+                mc(hwnd, 1453, 799)
+                await sleep(500)
+                break
             default:
                 if (i++ > 5) {
                     mc(hwnd, 1456, 808)
