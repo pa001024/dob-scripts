@@ -1,11 +1,11 @@
 // ==UserScript==
 // @id 4PvTpU_n-H
 // @name autoshengming
-// @description 声名自动提交与刷新
+// @description 声名惠赠自动提交与刷新
 // @author pa
 // @version 1.0.0
 // @category 其他
-// @date 2026/2/23 15:18:31
+// @date 2026/2/23 16:01:47
 // ==/UserScript==
 
 // 说明: 进"惠赠"页面开启
