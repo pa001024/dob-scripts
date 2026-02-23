@@ -186,39 +186,67 @@ async function prepareSkill(skill) {
  */
 async function useSkill(skill) {
     await prepareSkill(skill)
+    /**
+     * 通过轮询 mp 是否下降判断 Q 是否成功释放，失败则重按 Q。
+     * @param {number} pressMs 按键时长
+     * @param {number} timeoutMs 总超时时间
+     */
+    async function pressQUntilMpReduced(pressMs = 10, timeoutMs = 2e3) {
+        const timer = new Timer()
+        while (checkStop() && timer.elapsed() < timeoutMs) {
+            const before = gameState.mp
+            await kb(hwnd, "q", pressMs)
+            const pollTimer = new Timer()
+            while (checkStop() && pollTimer.elapsed() < 350) {
+                if (gameState.mp < before) {
+                    return true
+                }
+                await sleep(20)
+            }
+            await sleep(60)
+        }
+        return false
+    }
     switch (skill) {
         case "q":
-            await kb(hwnd, "q", 10)
-            return true
+            return await pressQUntilMpReduced(10, 1800)
         case "z":
             await kb(hwnd, "z", 10)
             return true
         case "q1":
             if (currentSkill === 1) {
-                await kb(hwnd, "q", 10)
-                await sleep(1000)
-                return true
+                const ok = await pressQUntilMpReduced(10, 2e3)
+                if (ok) {
+                    await sleep(1000)
+                }
+                return ok
             }
             break
         case "q2":
             if (currentSkill === 2) {
-                await kb(hwnd, "q", 10)
-                await sleep(3300)
-                return true
+                const ok = await pressQUntilMpReduced(10, 2500)
+                if (ok) {
+                    await sleep(3300)
+                }
+                return ok
             }
             break
         case "Q2":
             if (currentSkill === 2) {
-                await kb(hwnd, "q", 500)
-                await sleep(3300)
-                return true
+                const ok = await pressQUntilMpReduced(500, 3e3)
+                if (ok) {
+                    await sleep(3300)
+                }
+                return ok
             }
             break
         case "q3":
             if (currentSkill === 3) {
-                await kb(hwnd, "q", 10)
-                await sleep(1600)
-                return true
+                const ok = await pressQUntilMpReduced(10, 2e3)
+                if (ok) {
+                    await sleep(1600)
+                }
+                return ok
             }
             break
     }
