@@ -325,6 +325,13 @@ declare function mc(button: "left" | "right" | "middle" | "x1" | "x2" | "l" | "r
 /**
  * 鼠标点击操作
  * @param hwnd 窗口句柄 (为0表示前台)
+ * @param button 按键类型：left/right/middle/x1/x2
+ */
+declare function mc(hwnd: number, button: "left" | "right" | "middle" | "x1" | "x2" | "l" | "r" | "m"): void
+
+/**
+ * 鼠标点击操作
+ * @param hwnd 窗口句柄 (为0表示前台)
  * @param x X坐标
  * @param y Y坐标
  * @param button 按键类型（可选，默认 left）：left/right/middle/x1/x2
@@ -907,8 +914,9 @@ declare function drawContours(
  * @param y 左上角Y坐标（相对窗口客户区）
  * @param w 边框宽度
  * @param h 边框高度
+ * @param timeout 边框显示时长（毫秒，默认 2000）
  */
-declare function drawBorder(hwnd: number, x: number, y: number, w: number, h: number): void
+declare function drawBorder(hwnd: number, x: number, y: number, w: number, h: number, timeout?: number): void
 
 /**
  * 检查颜色矩阵（使用Mat对象）

@@ -5,7 +5,7 @@
 // @author pa
 // @version 1.0.0
 // @category 开发工具
-// @date 2026/2/22 04:45:56
+// @date 2026/2/23 18:23:42
 // ==/UserScript==
 
 const hwnd = getWindowByProcessName("EM-Win64-Shipping.exe")
@@ -14,31 +14,42 @@ checkSize(hwnd)
 
 /** @param {Mat} frame */
 function checkState(frame) {
-    if (cc(frame, 46, 274, 0xffffc2, 30)) {
-        return "pre"
-    } else {
-        if (cc(frame, 44, 276, 0xeb3a43, 10)) {
-            if (cc(frame, 525, 63, 0x000000, 10)) {
-                return "boss"
-            } else {
-                return "battle"
-            }
+    if (cc(frame, 46, 274, 0xffffc2, 10)) {
+        if (cc(frame, 85, 354, 0x000000, 10)) {
+            return "battle"
         } else {
-            if (cc(frame, 25, 25, 0xfff6b4, 10)) {
-                return "menu"
-            } else {
-                if (cc(frame, 1059, 841, 0xe1b454, 10)) {
-                    return "finish"
+            return "pre"
+        }
+    } else {
+        if (cc(frame, 1044, 795, 0xe1b454, 10)) {
+            return "finish"
+        } else {
+            if (cc(frame, 348, 285, 0x000000, 10)) {
+                if (cc(frame, 508, 623, 0x34a981, 10)) {
+                    return "next"
                 } else {
-                    if (cc(frame, 1533, 869, 0x000000, 10)) {
-                        return "loading"
+                    return "confirm"
+                }
+            } else {
+                if (cc(frame, 167, 353, 0x000000, 10)) {
+                    if (cc(frame, 34, 358, 0x000000, 10)) {
+                        return "battle2"
                     } else {
-                        return "unknown"
+                        return "enter"
+                    }
+                } else {
+                    if (cc(frame, 1479, 799, 0xffffff, 10)) {
+                        return "esc"
+                    } else {
+                        if (cc(frame, 474, 371, 0x000000, 10)) {
+                            return "escconfirm"
+                        }
                     }
                 }
             }
         }
     }
+    return "unknown"
 }
 async function main() {
     let i = 0

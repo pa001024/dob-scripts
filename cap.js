@@ -5,7 +5,7 @@
 // @author pa
 // @version 1.0.0
 // @category 开发工具
-// @date 2026/2/22 18:42:16
+// @date 2026/2/23 23:50:34
 // ==/UserScript==
 
 const hwnd = getWindowByProcessName("EM-Win64-Shipping.exe")

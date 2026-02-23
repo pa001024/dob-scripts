@@ -453,7 +453,7 @@ async function moveLoop(type = "door") {
             await waitF(500)
             ku(hwnd, "w")
         }
-        if (totalTimeout.elapsed() > 20e3) {
+        if (totalTimeout.elapsed() > 30e3) {
             autoAimX = false
             console.log("移动超时")
             await resetLoop()
@@ -483,42 +483,24 @@ async function battleLoop(state) {
     while (checkStop()) {
         const state = checkState(frame)
         setStatus("state", state)
-        if (state !== "boss") {
-            await prepareSkill("q2")
-        }
         if (state !== "boss" && state !== "battle" && state !== "unknown") {
             setStatus("fn")
             mt(hwnd)
             return
         }
-        if (state === "boss") {
-            mt(hwnd) // 锁定BOSS
-            await sleep(300)
-            await kb(hwnd, "w", 30)
-            const x = frame.get_hsl(1366, 863)
-            // 神智大于一定值才用q3
-            if (x && x[2] > 0.6) {
-                await useSkill("q3")
-            }
-        }
         await sleep(100)
-        if (frame.get_hsl(794, 821)[2] < 0.8) {
+        if (frame.get_hsl(782, 822)[2] < 0.7 || timer.elapsed() > 35e3) {
             await useSkill("q2")
             await useSkill("z")
             if (state === "boss" ? config.useQ1 : config.useQ1B) {
                 await useSkill("q1")
             }
             timer.reset()
-        } else if (timer.elapsed() > 35e3) {
+        } else if (gameState.mp > 20 && state === "boss") {
             mt(hwnd) // 锁定BOSS
             await sleep(300)
             await kb(hwnd, "w", 30)
-            await useSkill("q2")
-            await useSkill("z")
-            if (state === "boss" && config.useQ1) {
-                await useSkill("q1")
-            }
-            timer.reset()
+            await useSkill("q3") // 有蓝放q3
         }
     }
 }

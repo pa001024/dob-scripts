@@ -454,6 +454,7 @@ async function waitF(t = 15000) {
 async function main() {
     const o = getForegroundWindow()
     mt(hwnd)
+    await kb(hwnd, "f")
     await sleep(100)
     setForegroundWindow(o)
 

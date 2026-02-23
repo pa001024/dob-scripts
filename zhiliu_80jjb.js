@@ -1,16 +1,12 @@
 // ==UserScript==
 // @id -
-// @name zhiliu_xiju
-// @description 止流戏剧 后台
+// @name zhiliu_80jjb
+// @description 止流80JJB 后台
 // @author pa
 // @version 1.0.0
 // @category 其他
-// @date 2026/2/22 20:04:07
+// @date 2026/2/24 02:03:12
 // ==/UserScript==
-
-// 止流带专武裂魂雷月卡/球球蜂
-// 队友扶疏黎瑟
-// 进去再开 不识别外面的界面
 
 const config = {
     useQ1: readConfig("搓BUFF", "是否释放Q1（6命别选）", "boolean", false),
@@ -24,13 +20,13 @@ checkSize(hwnd)
 let frame = captureWindowWGC(hwnd)
 let autoAimX = false
 let autoAimY = false
-let isFirstMap = true
 const autoAimoffsetY = -100
 const gameState = {
     dx: 0,
     dy: 0,
     distance: 0,
     angle: 0,
+    mp: 0,
 }
 function checkStop() {
     return true
@@ -64,6 +60,175 @@ function checkSkill(img) {
     }
 
     return -1
+}
+
+async function routes(i = 0) {
+    const fn = [
+        // 左拐
+        async function recorded() {
+            const timer = new Timer()
+            await timer.sleep(500)
+            kd(hwnd, "w")
+            await timer.sleep(141)
+            kd(hwnd, "4")
+            await timer.sleep(181)
+            ku(hwnd, "4")
+            await timer.sleep(674)
+            kd(hwnd, "4")
+            await timer.sleep(164)
+            ku(hwnd, "4")
+            await timer.sleep(815)
+            kd(hwnd, "4")
+            await timer.sleep(201)
+            ku(hwnd, "4")
+            await timer.sleep(643)
+            kd(hwnd, "4")
+            await timer.sleep(215)
+            ku(hwnd, "4")
+            await timer.sleep(1464)
+            ku(hwnd, "w")
+            await timer.sleep(104)
+            kd(hwnd, "a")
+            await timer.sleep(480)
+            ku(hwnd, "a")
+            await timer.sleep(333)
+            mc(hwnd, "middle")
+            await timer.sleep(555)
+            kd(hwnd, "w")
+            await timer.sleep(127)
+            kd(hwnd, "4")
+            await timer.sleep(138)
+            ku(hwnd, "4")
+            await timer.sleep(620)
+            kd(hwnd, "4")
+            await timer.sleep(141)
+            ku(hwnd, "4")
+            await timer.sleep(117)
+            ku(hwnd, "w")
+            await timer.sleep(198)
+            kd(hwnd, "w")
+            await timer.sleep(587)
+            ku(hwnd, "w")
+            await timer.sleep(868)
+            kd(hwnd, "d")
+            await timer.sleep(114)
+            ku(hwnd, "d")
+            await timer.sleep(719)
+            mc(hwnd, "middle")
+            await timer.sleep(692)
+            kd(hwnd, "w")
+            await timer.sleep(154)
+            kd(hwnd, "4")
+            await timer.sleep(124)
+            ku(hwnd, "4")
+            await timer.sleep(761)
+            ku(hwnd, "w")
+            await timer.sleep(198)
+            kd(hwnd, "d")
+            await timer.sleep(546)
+            kd(hwnd, "w")
+            await timer.sleep(2102)
+            ku(hwnd, "d")
+            await timer.sleep(798)
+            kd(hwnd, "4")
+            await timer.sleep(131)
+            ku(hwnd, "4")
+            await timer.sleep(734)
+            kd(hwnd, "4")
+            await timer.sleep(171)
+            ku(hwnd, "4")
+            await timer.sleep(1237)
+            ku(hwnd, "w")
+            await timer.sleep(2403)
+            kd(hwnd, "w")
+            await timer.sleep(466)
+            kd(hwnd, "d")
+            await timer.sleep(1332)
+            ku(hwnd, "d")
+            await timer.sleep(318)
+            kd(hwnd, "4")
+            await timer.sleep(151)
+            ku(hwnd, "4")
+            await timer.sleep(563)
+            kd(hwnd, "4")
+            await timer.sleep(192)
+            ku(hwnd, "4")
+            await timer.sleep(288)
+            kd(hwnd, "4")
+            await timer.sleep(171)
+            ku(hwnd, "4")
+            await timer.sleep(332)
+            kd(hwnd, "a")
+            await timer.sleep(1585)
+            ku(hwnd, "a")
+            await timer.sleep(389)
+            kd(hwnd, "4")
+            await timer.sleep(161)
+            ku(hwnd, "4")
+            await timer.sleep(727)
+            kd(hwnd, "4")
+            await timer.sleep(184)
+            ku(hwnd, "4")
+            await timer.sleep(661)
+            kd(hwnd, "4")
+            await timer.sleep(211)
+            ku(hwnd, "4")
+            await timer.sleep(456)
+            ku(hwnd, "w")
+        },
+        // 右拐
+        async function recorded() {
+            const timer = new Timer()
+            await timer.sleep(300)
+            await kb(hwnd, "4")
+            await kb(hwnd, "4")
+            await kb(hwnd, "4")
+            await timer.sleep(140)
+            await timer.sleep(709)
+            mc(hwnd)
+            await timer.sleep(1474)
+            kd(hwnd, "d")
+            await timer.sleep(368)
+            kd(hwnd, "w")
+            await timer.sleep(493)
+            ku(hwnd, "w")
+            await timer.sleep(302)
+            kd(hwnd, "w")
+            await timer.sleep(875)
+            ku(hwnd, "w")
+            await timer.sleep(472)
+            mc(hwnd, "middle")
+            await timer.sleep(21)
+            ku(hwnd, "d")
+            await timer.sleep(147)
+            await timer.sleep(581)
+            kd(hwnd, "w")
+            await timer.sleep(134)
+            kd(hwnd, "a")
+            await timer.sleep(248)
+            ku(hwnd, "a")
+            await timer.sleep(684)
+            kd(hwnd, "4")
+            await timer.sleep(121)
+            ku(hwnd, "4")
+            await timer.sleep(781)
+            kd(hwnd, "4")
+            await timer.sleep(158)
+            ku(hwnd, "4")
+            await timer.sleep(760)
+            kd(hwnd, "4")
+            await timer.sleep(158)
+            ku(hwnd, "4")
+            await timer.sleep(744)
+            kd(hwnd, "4")
+            await timer.sleep(171)
+            ku(hwnd, "4")
+            await timer.sleep(530)
+            ku(hwnd, "w")
+            await timer.sleep(466)
+        },
+    ]
+    await fn[i]()
 }
 
 /**
@@ -183,39 +348,67 @@ async function prepareSkill(skill) {
  */
 async function useSkill(skill) {
     await prepareSkill(skill)
+    /**
+     * 通过轮询 mp 是否下降判断 Q 是否成功释放，失败则重按 Q。
+     * @param {number} pressMs 按键时长
+     * @param {number} timeoutMs 总超时时间
+     */
+    async function pressQUntilMpReduced(pressMs = 10, timeoutMs = 2e3) {
+        const timer = new Timer()
+        while (checkStop() && timer.elapsed() < timeoutMs) {
+            const before = gameState.mp
+            await kb(hwnd, "q", pressMs)
+            const pollTimer = new Timer()
+            while (checkStop() && pollTimer.elapsed() < 350) {
+                if (gameState.mp < before) {
+                    return true
+                }
+                await sleep(20)
+            }
+            await sleep(60)
+        }
+        return false
+    }
     switch (skill) {
         case "q":
-            await kb(hwnd, "q", 10)
-            return true
+            return await pressQUntilMpReduced(10, 1800)
         case "z":
             await kb(hwnd, "z", 10)
             return true
         case "q1":
             if (currentSkill === 1) {
-                await kb(hwnd, "q", 10)
-                await sleep(1000)
-                return true
+                const ok = await pressQUntilMpReduced(10, 2e3)
+                if (ok) {
+                    await sleep(800)
+                }
+                return ok
             }
             break
         case "q2":
             if (currentSkill === 2) {
-                await kb(hwnd, "q", 10)
-                await sleep(3300)
-                return true
+                const ok = await pressQUntilMpReduced(10, 2500)
+                if (ok) {
+                    await sleep(3000)
+                }
+                return ok
             }
             break
         case "Q2":
             if (currentSkill === 2) {
-                await kb(hwnd, "q", 500)
-                await sleep(3300)
-                return true
+                const ok = await pressQUntilMpReduced(500, 3e3)
+                if (ok) {
+                    await sleep(3000)
+                }
+                return ok
             }
             break
         case "q3":
             if (currentSkill === 3) {
-                await kb(hwnd, "q", 10)
-                await sleep(1600)
-                return true
+                const ok = await pressQUntilMpReduced(10, 2e3)
+                if (ok) {
+                    await sleep(1000)
+                }
+                return ok
             }
             break
     }
@@ -226,60 +419,60 @@ async function useSkill(skill) {
  * @param {Mat} frame 窗口截图
  */
 function checkState(frame) {
-    if (cc(frame, 46, 274, 0xffffc2, 30)) {
-        return "pre"
-    } else {
-        if (cc(frame, 44, 276, 0xeb3a43, 10)) {
-            if (cc(frame, 525, 63, 0x000000, 10)) {
-                return "boss"
-            } else {
-                return "battle"
-            }
+    if (cc(frame, 46, 274, 0xffffc2, 10)) {
+        if (cc(frame, 85, 354, 0x000000, 10)) {
+            return "battle"
         } else {
-            if (cc(frame, 25, 25, 0xfff6b4, 10)) {
-                return "menu"
-            } else {
-                if (cc(frame, 1059, 841, 0xe1b454, 10)) {
-                    return "finish"
+            return "pre"
+        }
+    } else {
+        if (cc(frame, 1044, 795, 0xe1b454, 10)) {
+            return "finish"
+        } else {
+            if (cc(frame, 348, 285, 0x000000, 10)) {
+                if (cc(frame, 508, 623, 0x34a981, 10)) {
+                    return "next"
                 } else {
-                    if (cc(frame, 1533, 869, 0x000000, 10)) {
-                        return "loading"
+                    return "confirm"
+                }
+            } else {
+                if (cc(frame, 167, 353, 0x000000, 10)) {
+                    if (cc(frame, 34, 358, 0x000000, 10)) {
+                        return "battle2"
                     } else {
-                        return "unknown"
+                        return "enter"
+                    }
+                } else {
+                    if (cc(frame, 1479, 799, 0xffffff, 10)) {
+                        return "esc"
+                    } else {
+                        if (cc(frame, 474, 371, 0x000000, 10)) {
+                            return "escconfirm"
+                        }
                     }
                 }
             }
         }
     }
+    return "unknown"
 }
 
 /** @param {Mat} frame  */
 function checkMap(frame) {
     if (cc(frame, 138, 119, 0x080908, 10)) {
-        if (cc(frame, 129, 193, 0x080908, 10)) {
-            return "unknown"
-        } else {
-            if (cc(frame, 104, 133, 0x080908, 10)) {
-                return "unknown"
-            } else {
-                return "t3"
-            }
+        if (!cc(frame, 129, 193, 0x080908, 10) && !cc(frame, 104, 133, 0x080908, 10)) {
+            return "t3"
         }
     } else {
         if (cc(frame, 129, 193, 0x080908, 10)) {
             return "t1"
         } else {
-            if (cc(frame, 104, 133, 0x080908, 10)) {
-                if (cc(frame, 163, 181, 0x0c1211, 10)) {
-                    return "unknown"
-                } else {
-                    return "t2"
-                }
-            } else {
-                return "unknown"
+            if (cc(frame, 104, 133, 0x080908, 10) && !cc(frame, 163, 181, 0x0c1211, 10)) {
+                return "t2"
             }
         }
     }
+    return "unknown"
 }
 
 /**
@@ -365,11 +558,11 @@ function projectOffsetToMm(dx, dy, opts = {}) {
 /**
  * 自动寻路
  */
-async function moveLoop(type = "door") {
+async function moveLoop(type = "pre") {
     setStatus("fn", "moveLoop")
     async function checkFinish() {
         const state = checkState(frame)
-        if (state === "battle" || state === "boss") {
+        if (state === "battle" || state === "battle2") {
             autoAimX = false
             return true
         }
@@ -384,15 +577,15 @@ async function moveLoop(type = "door") {
     const map = checkMap(frame)
     setStatus("map", map)
     switch (map) {
-        case "left":
-            mt(hwnd)
-            await sleep(400)
-            kb(hwnd, "4")
-            await sleep(300)
-            kb(hwnd, "space")
-            await sleep(300)
-            mc(hwnd)
-            await sleep(1000)
+        case "t1":
+            await kb(hwnd, "esc")
+            await sleep(500)
+            return
+        case "t2":
+            await routes(1)
+            break
+        case "t3":
+            await routes(0)
             break
     }
     const totalTimeout = new Timer()
@@ -402,13 +595,11 @@ async function moveLoop(type = "door") {
         setStatus("state", state)
         if (state !== type) {
             ku(hwnd, "w")
-            isFirstMap = false
             setStatus("err")
             return
         }
         if (await checkFinish()) {
             ku(hwnd, "w")
-            isFirstMap = false
             setStatus("err")
             return
         }
@@ -449,55 +640,25 @@ async function moveLoop(type = "door") {
  */
 async function battleLoop() {
     setStatus("fn", "battleLoop")
-    ku(hwnd, "w")
     const timer = new Timer()
-    mt(hwnd) // 锁定BOSS
-    await sleep(300)
-    await kb(hwnd, "w", 30)
-    await useSkill("q2")
-    await useSkill("z")
-    if (config.useQ1) {
-        await useSkill("q1")
-    }
     while (checkStop()) {
         const state = checkState(frame)
         setStatus("state", state)
-        if (state !== "boss") {
-            await prepareSkill("q2")
-        }
-        if (state !== "boss" && state !== "battle" && state !== "unknown") {
+        if (state !== "battle" && state !== "battle2" && state !== "unknown") {
             setStatus("fn")
             mt(hwnd)
             return
         }
-        if (state === "boss") {
-            mt(hwnd) // 锁定BOSS
-            await sleep(300)
-            await kb(hwnd, "w", 30)
-            const x = frame.get_hsl(1366, 863)
-            // 神智大于一定值才用q3
-            if (x && x[2] > 0.6) {
-                await useSkill("q3")
-            }
-        }
-        await sleep(100)
-        if (frame.get_hsl(794, 821)[2] < 0.8) {
-            await useSkill("q2")
+        await sleep(300)
+        if (frame.get_hsl(782, 822)[2] < 0.7 || timer.elapsed() > 35e3) {
+            await useSkill("q2") // 龙计时条消失立刻自动q2
             await useSkill("z")
             if (config.useQ1) {
                 await useSkill("q1")
             }
             timer.reset()
-        } else if (timer.elapsed() > 35e3) {
-            mt(hwnd) // 锁定BOSS
-            await sleep(300)
-            await kb(hwnd, "w", 30)
-            await useSkill("q2")
-            await useSkill("z")
-            if (state === "boss" && config.useQ1) {
-                await useSkill("q1")
-            }
-            timer.reset()
+        } else if (gameState.mp > 20) {
+            await useSkill("q3") // 有蓝放q3
         }
     }
 }
@@ -554,9 +715,18 @@ function numocr(roi) {
         .join("")
 }
 
+/** @param {Mat} frame  */
+function getMP(frame) {
+    const roi = frame.roi(1302, 859, 243, 4)
+    const p = roi.find_bright(243, 2, 243, 150, 0, ">", "rtl")
+    const mp = p ? Math.round(p[0] / 2.42) : 0
+    setStatus("mp", roi, mp)
+    return mp
+}
 const ftimer = setInterval(async () => {
     if (!checkStop()) clearInterval(ftimer)
     frame = captureWindowWGC(hwnd)
+    gameState.mp = getMP(frame)
     if (autoAimX || autoAimY) {
         const door = findYellow(frame)
         if (door) {
@@ -604,10 +774,10 @@ function checkF() {
 async function main() {
     const o = getForegroundWindow()
     mt(hwnd)
+    await kb(hwnd, "f")
     await sleep(100)
     setForegroundWindow(o)
 
-    let i = 0
     let finished = 0
     const timer = new Timer()
     while (checkStop()) {
@@ -616,35 +786,35 @@ async function main() {
         autoAimX = false
         switch (state) {
             case "pre":
-                i = 0
                 await moveLoop(state)
                 break
             case "battle":
-            case "boss":
-                i = 0
                 await battleLoop()
                 break
-            case "finish": {
-                isFirstMap = true
+            case "next": {
                 const secs = timer.elapsed() / 1e3
                 timer.reset()
                 console.info(`完成 ${++finished}次 用时 ${~~(secs / 60)}分${~~(secs % 60)}秒`)
-                mc(hwnd, 1476, 846)
+                mc(hwnd, 1020, 624)
                 await sleep(1500)
                 break
             }
-            case "loading":
+            case "battle2":
                 break
-            case "menu":
-                mc(hwnd, 1453, 799)
-                await sleep(500)
+            case "esc":
+                mc(hwnd, 1435, 814)
                 break
-            default:
-                if (i++ > 5) {
-                    mc(hwnd, 1456, 808)
-                    i = 0
-                }
-                await sleep(300)
+            case "finish":
+                mc(hwnd, 1160, 796)
+                break
+            case "enter":
+                mc(hwnd, 1365, 814)
+                break
+            case "escconfirm":
+                mc(hwnd, 927, 504)
+                break
+            case "confirm":
+                mc(hwnd, 847, 591)
                 break
         }
         await sleep(15)
