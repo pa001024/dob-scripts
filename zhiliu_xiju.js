@@ -34,6 +34,7 @@ const gameState = {
     dy: 0,
     distance: 0,
     angle: 0,
+    mp: 0,
 }
 function checkStop() {
     return true
@@ -155,7 +156,6 @@ async function prepareSkill(skill) {
     currentSkill = checkSkill(frame)
     /** @param {"long" | "short"} type 长E或短E */
     async function useSkillEAndCheck(type) {
-        // console.log(`useSkillEAndCheck(${type})`)
         await kb(hwnd, "e", type === "long" ? 600 : 10)
         await sleep(type === "long" ? 600 : 300)
         // 更新画面
@@ -395,13 +395,11 @@ async function moveLoop(type = "door") {
         setStatus("state", state)
         if (state !== type) {
             ku(hwnd, "w")
-            isFirstMap = false
             setStatus("err")
             return
         }
         if (await checkFinish()) {
             ku(hwnd, "w")
-            isFirstMap = false
             setStatus("err")
             return
         }
@@ -442,6 +440,7 @@ async function moveLoop(type = "door") {
  * @param {string} state 战斗状态
  */
 async function battleLoop(state) {
+    isFirstMap = false
     setStatus("fn", "battleLoop")
     ku(hwnd, "w")
     const timer = new Timer()
@@ -548,9 +547,18 @@ function numocr(roi) {
         .join("")
 }
 
+/** @param {Mat} frame  */
+function getMP(frame) {
+    const roi = frame.roi(1302, 859, 243, 4)
+    const p = roi.find_bright(243, 2, 243, 150, 0, ">", "rtl")
+    const mp = p ? Math.round(p[0] / 2.42) : 0
+    setStatus("mp", roi, mp)
+    return mp
+}
 const ftimer = setInterval(async () => {
     if (!checkStop()) clearInterval(ftimer)
     frame = captureWindowWGC(hwnd)
+    gameState.mp = getMP(frame)
     if (autoAimX || autoAimY) {
         const door = findYellow(frame)
         if (door) {

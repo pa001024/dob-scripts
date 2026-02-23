@@ -452,6 +452,11 @@ async function waitF(t = 15000) {
 }
 
 async function main() {
+    const o = getForegroundWindow()
+    mt(hwnd)
+    await sleep(100)
+    setForegroundWindow(o)
+
     // 检查是否已经在钓鱼界面
     const frame = captureWindowWGC(hwnd)
     const time = identifyTime(frame)
