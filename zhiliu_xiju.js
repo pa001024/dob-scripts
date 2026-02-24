@@ -42,32 +42,22 @@ function checkStop() {
 
 /**
  * 检查技能状态
- * @param {Mat} img 窗口截图
+ * @param {Mat} frame 窗口截图
  */
-function checkSkill(img) {
-    const skill_orb = [
-        cc(img, 1437, 810, 0xececed, 10),
-        cc(img, 1433, 811, 0xececed, 10),
-        cc(img, 1439, 819, 0xececed, 10),
-        cc(img, 1439, 819, 0xececed, 10),
-        cc(img, 1445, 816, 0xececed, 10),
-    ]
-        .map(v => (v ? "1" : "0"))
-        .join("")
-
-    // console.log(skill_orb)
-    switch (skill_orb) {
-        case "10110": // 无符
-            return 0
-        case "00110": // BUFF
-            return 1
-        case "01111": // 龙
-            return 2
-        case "00001": // 剑
-            return 3
+function checkSkill(frame) {
+    if (cc(frame, 1435, 814, 0xe9edef, 10)) {
+        if (cc(frame, 1442, 822, 0xe9edef, 10)) {
+            return "q2"
+        } else {
+            return "q1"
+        }
+    } else {
+        if (cc(frame, 1442, 822, 0xe9edef, 10)) {
+            return "q3"
+        } else {
+            return "q0"
+        }
     }
-
-    return -1
 }
 
 /**
@@ -153,30 +143,25 @@ let currentSkill = checkSkill(frame)
  * @param {'q'|'q1'|'q2'|'Q2'|'q3'|'z'} skill 技能编号
  */
 async function prepareSkill(skill) {
-    currentSkill = checkSkill(frame)
+    setStatus("fn", "prepareSkill")
     /** @param {"long" | "short"} type 长E或短E */
     async function useSkillEAndCheck(type) {
         await kb(hwnd, "e", type === "long" ? 600 : 10)
-        await sleep(type === "long" ? 600 : 300)
-        // 更新画面
-        currentSkill = checkSkill(frame)
+        await sleep(type === "long" ? 800 : 300)
     }
     switch (skill) {
         case "q1":
-            if (currentSkill !== 1) await useSkillEAndCheck("long")
-            if (currentSkill !== 1) await useSkillEAndCheck("long")
+            while (currentSkill !== "q1") await useSkillEAndCheck("long")
             break
         case "q2":
-            if (currentSkill !== 2 && currentSkill !== 3) await useSkillEAndCheck("short")
-            if (currentSkill !== 2) await useSkillEAndCheck("long")
-            break
         case "Q2":
-            if (currentSkill !== 2 && currentSkill !== 3) await useSkillEAndCheck("short")
-            if (currentSkill !== 2) await useSkillEAndCheck("long")
+            while (currentSkill !== "q2") {
+                if (currentSkill !== "q2" && currentSkill !== "q3") await useSkillEAndCheck("short")
+                await useSkillEAndCheck("long")
+            }
             break
         case "q3":
-            if (currentSkill !== 3) await useSkillEAndCheck("short")
-            if (currentSkill !== 3) await useSkillEAndCheck("short")
+            while (currentSkill !== "q3") await useSkillEAndCheck("short")
             break
     }
 }
@@ -186,6 +171,7 @@ async function prepareSkill(skill) {
  */
 async function useSkill(skill) {
     await prepareSkill(skill)
+    setStatus("fn", "useSkill")
     /**
      * 通过轮询 mp 是否下降判断 Q 是否成功释放，失败则重按 Q。
      * @param {number} pressMs 按键时长
@@ -214,7 +200,7 @@ async function useSkill(skill) {
             await kb(hwnd, "z", 10)
             return true
         case "q1":
-            if (currentSkill === 1) {
+            if (currentSkill === "q1") {
                 const ok = await pressQUntilMpReduced(10, 2e3)
                 if (ok) {
                     await sleep(1000)
@@ -223,7 +209,7 @@ async function useSkill(skill) {
             }
             break
         case "q2":
-            if (currentSkill === 2) {
+            if (currentSkill === "q2") {
                 const ok = await pressQUntilMpReduced(10, 2500)
                 if (ok) {
                     await sleep(3300)
@@ -232,7 +218,7 @@ async function useSkill(skill) {
             }
             break
         case "Q2":
-            if (currentSkill === 2) {
+            if (currentSkill === "q3") {
                 const ok = await pressQUntilMpReduced(500, 3e3)
                 if (ok) {
                     await sleep(3300)
@@ -241,7 +227,7 @@ async function useSkill(skill) {
             }
             break
         case "q3":
-            if (currentSkill === 3) {
+            if (currentSkill === "q3") {
                 const ok = await pressQUntilMpReduced(10, 2e3)
                 if (ok) {
                     await sleep(1600)
@@ -481,6 +467,7 @@ async function battleLoop(state) {
         await useSkill("q1")
     }
     while (checkStop()) {
+        await sleep(100)
         const state = checkState(frame)
         setStatus("state", state)
         if (state !== "boss" && state !== "battle" && state !== "unknown") {
@@ -488,7 +475,6 @@ async function battleLoop(state) {
             mt(hwnd)
             return
         }
-        await sleep(100)
         if (frame.get_hsl(782, 822)[2] < 0.7 || timer.elapsed() > 35e3) {
             await useSkill("q2")
             await useSkill("z")
@@ -496,7 +482,7 @@ async function battleLoop(state) {
                 await useSkill("q1")
             }
             timer.reset()
-        } else if (gameState.mp > 20 && state === "boss") {
+        } else if (gameState.mp > 20) {
             mt(hwnd) // 锁定BOSS
             await sleep(300)
             await kb(hwnd, "w", 30)
@@ -569,6 +555,8 @@ const ftimer = setInterval(async () => {
     if (!checkStop()) clearInterval(ftimer)
     frame = captureWindowWGC(hwnd)
     gameState.mp = getMP(frame)
+    currentSkill = checkSkill(frame)
+    setStatus("skill", currentSkill)
     if (autoAimX || autoAimY) {
         const door = findYellow(frame)
         if (door) {
@@ -614,7 +602,11 @@ function checkF() {
 }
 
 async function main() {
+    const o = getForegroundWindow()
+    mt(hwnd)
+    await kb(hwnd, "f")
     await sleep(100)
+    setForegroundWindow(o)
 
     let i = 0
     let finished = 0
@@ -628,8 +620,9 @@ async function main() {
                 i = 0
                 if (isFirstMap || !config.onlyL1) await moveLoop(state)
                 else if (config.preBuff) {
-                    if (config.useQ1B) await useSkill("q1")
+                    await sleep(300)
                     await useSkill("q2")
+                    if (config.useQ1B) await useSkill("q1")
                 }
                 break
             case "battle":

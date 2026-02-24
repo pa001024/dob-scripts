@@ -1,11 +1,11 @@
 // ==UserScript==
 // @id 5vqUVzQDRk
 // @name zhiliu_common
-// @description 止流后台通用
+// @description 止流后台通用 半自动
 // @author pa
 // @version 1.0.0
 // @category 其他
-// @date 2026/2/24 02:08:32
+// @date 2026/2/24 13:08:36
 // ==/UserScript==
 
 const config = {
@@ -383,7 +383,7 @@ async function battleLoop() {
             return
         }
         await sleep(300)
-        if (frame.get_hsl(780, 822)[2] < 0.7 || timer.elapsed() > 35e3) {
+        if (frame.get_hsl(780, 822)[2] < 0.6 || timer.elapsed() > 35e3) {
             await useSkill("q2") // 龙计时条消失立刻自动q2
             await useSkill("z")
             if (config.useQ1) {

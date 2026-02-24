@@ -22,6 +22,7 @@ const config = {
         ["黄", "蓝", "大红", "小红"]
     ),
     useQ1: readConfig("搓BUFF", "Boss阶段是否释放Q1（6命别选）", "boolean", false), // 6命别选
+    moveTimeout: readConfig("移动超时", "移动超时重置间隔(秒)", "number", 25), // 6命别选
     /** @type {ROI} */ minimapLoc: [30, 35, 180, 180],
     /** @type {ROI} */ mainLoc: [290, 169, 1020, 514],
 }
@@ -43,6 +44,7 @@ const gameState = {
     dy: 0,
     distance: 0,
     angle: 0,
+    mp: 0,
 }
 function checkStop() {
     return hwnd === getForegroundWindow()
@@ -250,42 +252,71 @@ async function prepareSkill(skill) {
  */
 async function useSkill(skill) {
     await prepareSkill(skill)
+    /**
+     * 通过轮询 mp 是否下降判断 Q 是否成功释放，失败则重按 Q。
+     * @param {number} pressMs 按键时长
+     * @param {number} timeoutMs 总超时时间
+     */
+    async function pressQUntilMpReduced(pressMs = 10, timeoutMs = 2e3) {
+        const timer = new Timer()
+        while (checkStop() && timer.elapsed() < timeoutMs) {
+            const before = gameState.mp
+            await kb(hwnd, "q", pressMs)
+            const pollTimer = new Timer()
+            while (checkStop() && pollTimer.elapsed() < 350) {
+                if (gameState.mp < before) {
+                    return true
+                }
+                await sleep(20)
+            }
+            await sleep(60)
+        }
+        return false
+    }
     switch (skill) {
         case "q":
-            await kb(hwnd, "q", 10)
-            return true
+            return await pressQUntilMpReduced(10, 1800)
         case "z":
             await kb(hwnd, "z", 10)
             return true
         case "q1":
             if (currentSkill === 1) {
-                await kb(hwnd, "q", 10)
-                await sleep(2000)
-                return true
+                const ok = await pressQUntilMpReduced(10, 2e3)
+                if (ok) {
+                    await sleep(1000)
+                }
+                return ok
             }
             break
         case "q2":
             if (currentSkill === 2) {
-                await kb(hwnd, "q", 10)
-                await sleep(4000)
-                return true
+                const ok = await pressQUntilMpReduced(10, 2500)
+                if (ok) {
+                    await sleep(3300)
+                }
+                return ok
             }
             break
         case "Q2":
             if (currentSkill === 2) {
-                await kb(hwnd, "q", 500)
-                await sleep(4000)
-                return true
+                const ok = await pressQUntilMpReduced(500, 3e3)
+                if (ok) {
+                    await sleep(3300)
+                }
+                return ok
             }
             break
         case "q3":
             if (currentSkill === 3) {
-                await kb(hwnd, "q", 10)
-                await sleep(2000)
-                return true
+                const ok = await pressQUntilMpReduced(10, 2e3)
+                if (ok) {
+                    await sleep(1600)
+                }
+                return ok
             }
             break
     }
+    return false
 }
 async function doge(boss = false) {
     // 原地二段跳
@@ -627,7 +658,7 @@ async function moveLoop(type = "door") {
         // 远距离移动
         if (gameState.distance > 20 || (gameState.distance > 10 && gameState.dy < -30) || gameState.dy < -220) {
             autoAimX = false
-            await rollAbs(gameState.distance > 16 ? -60 : gameState.distance > 12 ? -30 : -10)
+            await rollAbs(gameState.distance > 22 ? -45 : gameState.distance > 15 ? -20 : -5)
             kb(hwnd, "4")
             await sleep(500)
             await rollAbs(0)
@@ -646,7 +677,7 @@ async function moveLoop(type = "door") {
             await waitF(500)
             ku(hwnd, "w")
         }
-        if (totalTimeout.elapsed() > 13e3) {
+        if (totalTimeout.elapsed() > config.moveTimeout * 1e3) {
             autoAimX = false
             console.log("移动超时")
             await resetLoop()
@@ -694,31 +725,21 @@ async function battleLoop(state) {
             mt(hwnd) // 锁定BOSS
             await sleep(300)
             await kb(hwnd, "w", 30)
-            const x = frame.get_hsl(1366, 863)
-            // 神智大于一定值才用q3
-            if (x && x[2] > 0.6) {
-                await useSkill("q3")
-            }
         }
         await doge(state === "boss")
         await sleep(100)
-        if (frame.get_hsl(794, 821)[2] < 0.8) {
+        if (frame.get_hsl(782, 822)[2] < 0.7 || timer.elapsed() > 35e3) {
             await useSkill("q2")
             await useSkill("z")
             if (state === "boss" && config.useQ1) {
                 await useSkill("q1")
             }
             timer.reset()
-        } else if (timer.elapsed() > 35e3) {
+        } else if (gameState.mp > 20 && state === "boss") {
             mt(hwnd) // 锁定BOSS
             await sleep(300)
             await kb(hwnd, "w", 30)
-            await useSkill("q2")
-            await useSkill("z")
-            if (state === "boss" && config.useQ1) {
-                await useSkill("q1")
-            }
-            timer.reset()
+            await useSkill("q3") // 有蓝放q3
         }
     }
 }
@@ -765,7 +786,6 @@ async function selectShopOption() {
 }
 
 const xtimer = setInterval(async () => {
-    if (!checkStop()) clearInterval(xtimer)
     kb(hwnd, "x")
 }, 2e3)
 
@@ -794,9 +814,18 @@ function numocr(roi) {
         .join("")
 }
 
+/** @param {Mat} frame  */
+function getMP(frame) {
+    const roi = frame.roi(1302, 859, 243, 4)
+    const p = roi.find_bright(243, 2, 243, 150, 0, ">", "rtl")
+    const mp = p ? Math.round(p[0] / 2.42) : 0
+    setStatus("mp", roi, mp)
+    return mp
+}
+
 const ftimer = setInterval(() => {
-    if (!checkStop()) clearInterval(ftimer)
     frame = captureWindowWGC(hwnd)
+    gameState.mp = getMP(frame)
     if (autoAimX || autoAimY) {
         const door = findFn(frame)
         const mDoor = findDoorMinimap(frame)
@@ -936,5 +965,8 @@ async function main() {
         }
         await sleep(15)
     }
+    clearInterval(ftimer)
+    clearInterval(xtimer)
+    console.log("切换窗口 自动退出")
 }
 main()
