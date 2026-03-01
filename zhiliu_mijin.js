@@ -229,7 +229,7 @@ async function prepareSkill(skill) {
     async function useSkillEAndCheck(type) {
         // console.log(`useSkillEAndCheck(${type})`)
         await kb(hwnd, "e", type === "long" ? 800 : 10)
-        await sleep(type === "long" ? 1500 : 400)
+        await sleep(type === "long" ? 1300 : 350)
         // 更新画面
         currentSkill = checkSkill(frame)
     }
