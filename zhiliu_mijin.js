@@ -5,7 +5,7 @@
 // @author pa
 // @version 1.2.1
 // @category 其他
-// @date 2026/2/28 16:17:52
+// @date 2026/3/1 11:35:19
 // ==/UserScript==
 
 // 说明: 键位和视角设置全默认(!!!!) 视距1.3
@@ -440,15 +440,11 @@ function checkMap(frame) {
     function getMap(points) {
         switch (points) {
             case "01110000010":
-            case "11110000010":
             case "11111000010":
             case "10101000110":
             case "11101000110":
-            case "11110000000":
-            case "11110000011":
             case "11101000000":
             case "11100000110":
-            case "11110000110":
             case "11111000000":
                 return "zuoguai"
             case "00000111001":
@@ -459,6 +455,7 @@ function checkMap(frame) {
             case "00000000011":
                 return "bossfang"
             default:
+                if (points.startsWith("1111000")) return "zuoguai"
                 return points.startsWith("1111") ? "maybe" : "unknown"
         }
     }
@@ -595,12 +592,14 @@ let resetOnce = false
  */
 async function moveLoop(type = "door") {
     setStatus("fn", "moveLoop")
-    async function checkFinish() {
+    async function checkFinish(t = 0) {
         if (gameState.state.includes("battle")) {
+            setStatus("err")
             resetFlag = autoAimX = resetOnce = false
             return true
         }
-        if (checkF()) {
+        if (t ? await waitF(t) : checkF()) {
+            setStatus("err")
             resetFlag = resetOnce = autoAimX = false
             await kb(hwnd, "f", 33)
             await sleep(1000)
@@ -609,8 +608,19 @@ async function moveLoop(type = "door") {
         return false
     }
     if (isPaopai) {
-        await resetLoop()
-        await sleep(1000)
+        kd(hwnd, "d")
+        await sleep(200)
+        await kb(hwnd, "space")
+        await sleep(400)
+        await kb(hwnd, "space")
+        await sleep(600)
+        ku(hwnd, "d")
+        if (checkF()) {
+            await kb(hwnd, "f")
+        } else {
+            await resetLoop()
+            await sleep(1000)
+        }
         isPaopai = false
         return
     }
@@ -683,12 +693,7 @@ async function moveLoop(type = "door") {
     while (checkStop() && (state === "event" || state === "door")) {
         state = gameState.state
         setStatus("state", state)
-        if (state !== type) {
-            ku(hwnd, "w")
-            setStatus("err")
-            return
-        }
-        if (await checkFinish()) {
+        if (state !== type || (await checkFinish())) {
             ku(hwnd, "w")
             setStatus("err")
             return
@@ -705,15 +710,17 @@ async function moveLoop(type = "door") {
             await sleep(500)
             await rollAbs(0)
             autoAimY = true
-            await sleep(300)
+            await waitF(300)
             autoAimY = false
             mt(hwnd)
+            if (await checkFinish()) return
             await sleep(33)
             mc(hwnd)
             await sleep(33)
             mc(hwnd)
-            await sleep(500)
+            if (await checkFinish(500)) return
             autoAimX = true
+            notMoved.reset()
         } else {
             kd(hwnd, "w")
             await waitF(200)
@@ -721,8 +728,8 @@ async function moveLoop(type = "door") {
                 await kb(hwnd, "shift")
                 shiftcd.reset()
             }
-            if (Math.abs(lastd - gameState.distance) < 1.5) {
-                if (notMoved.elapsed() > 2e3) {
+            if (gameState.distance > 0 && Math.abs(lastd - gameState.distance) < 1.5) {
+                if (notMoved.elapsed() > 2500) {
                     await kb(hwnd, "space")
                     await sleep(300)
                     await kb(hwnd, "space")
@@ -786,15 +793,17 @@ async function battleLoop(state) {
             mt(hwnd)
             return
         } else if (state === "unknown") {
-            await kb(hwnd, "space")
+            mc(hwnd, 1456, 808)
         }
         if (isBoss) {
             mt(hwnd) // 锁定BOSS
             await sleep(300)
             await kb(hwnd, "w", 30)
         }
-        await doge(isBoss)
-        await sleep(100)
+        if (!isBoss || isInv) {
+            await doge(isBoss)
+            await sleep(100)
+        }
         if (frame.get_hsl(782, 822)[2] < 0.7 || timer.elapsed() > 35e3) {
             await useSkill("q2")
             await useSkill("z")
@@ -913,6 +922,9 @@ const ftimer = setInterval(() => {
     frame = captureWindowWGC(hwnd)
     gameState.mp = getMP(frame)
     gameState.state = checkState(frame)
+    if (gameState.state === "buff") {
+        mc(hwnd, 1456, 808)
+    }
     if (autoAimX || autoAimY) {
         const door = findFn(frame)
         if (door) {
@@ -972,6 +984,7 @@ async function waitF(timeout = 5e3) {
 }
 
 function checkF() {
+    if (gameState.distance > 5) return false
     const phash = perceptualHash(frame.roi(955, 442, 14, 16))
     const matched = matchHammingHash(phash, ["a6a69e19631c69e2"], 10) >= 0
     return matched
