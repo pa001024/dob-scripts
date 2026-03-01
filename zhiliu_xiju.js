@@ -5,7 +5,7 @@
 // @author pa
 // @version 1.0.0
 // @category 其他
-// @date 2026/2/22 20:04:07
+// @date 2026/2/28 11:59:04
 // ==/UserScript==
 
 // 止流带专武裂魂雷月卡/球球蜂
@@ -17,6 +17,7 @@ const config = {
     useQ1B: readConfig("小怪层搓BUFF", "小怪阶段是否释放Q1（6命别选）", "boolean", false),
     onlyL1: readConfig("LV1", "仅第一层寻路", "boolean", true),
     preBuff: readConfig("2+层提前Q", "需勾选LV1才生效", "boolean", true),
+    preBuffDelay: readConfig("提前Q延迟", "预输入延迟时间 毫秒", "number", 1500),
     /** @type {ROI} */ mainLoc: [290, 169, 1020, 514],
 }
 
@@ -149,19 +150,20 @@ async function prepareSkill(skill) {
         await kb(hwnd, "e", type === "long" ? 600 : 10)
         await sleep(type === "long" ? 800 : 300)
     }
+    const timer = new Timer()
     switch (skill) {
         case "q1":
-            while (currentSkill !== "q1") await useSkillEAndCheck("long")
+            while (currentSkill !== "q1" && timer.elapsed() < 3e3) await useSkillEAndCheck("long")
             break
         case "q2":
         case "Q2":
-            while (currentSkill !== "q2") {
+            while (currentSkill !== "q2" && timer.elapsed() < 3e3) {
                 if (currentSkill !== "q2" && currentSkill !== "q3") await useSkillEAndCheck("short")
                 await useSkillEAndCheck("long")
             }
             break
         case "q3":
-            while (currentSkill !== "q3") await useSkillEAndCheck("short")
+            while (currentSkill !== "q3" && timer.elapsed() < 3e3) await useSkillEAndCheck("short")
             break
     }
 }
@@ -436,6 +438,10 @@ async function moveLoop(type = "door") {
             autoAimX = true
         } else {
             kd(hwnd, "w")
+            await waitF(200)
+            if (gameState.distance >= 8) {
+                await kb(hwnd, "shift")
+            }
             await waitF(500)
             ku(hwnd, "w")
         }
@@ -468,9 +474,9 @@ async function battleLoop(state) {
     }
     while (checkStop()) {
         await sleep(100)
-        const state = checkState(frame)
-        setStatus("state", state)
-        if (state !== "boss" && state !== "battle" && state !== "unknown") {
+        const state2 = checkState(frame)
+        setStatus("state", state2)
+        if (state2 !== state && state2 !== "unknown") {
             setStatus("fn")
             mt(hwnd)
             return
@@ -478,7 +484,7 @@ async function battleLoop(state) {
         if (frame.get_hsl(782, 822)[2] < 0.7 || timer.elapsed() > 35e3) {
             await useSkill("q2")
             await useSkill("z")
-            if (state === "boss" ? config.useQ1 : config.useQ1B) {
+            if (state2 === "boss" ? config.useQ1 : config.useQ1B) {
                 await useSkill("q1")
             }
             timer.reset()
@@ -491,26 +497,15 @@ async function battleLoop(state) {
     }
 }
 
-/**
- * 重置
- */
-async function resetLoop(skip = false) {
+/** 重置 */
+async function resetLoop() {
     setStatus("fn", "resetLoop")
     kb(hwnd, "esc", 33)
     await sleep(800)
-    if (!skip) {
-        mc(hwnd, 1115, 820)
-        await sleep(500)
-        mc(hwnd, 563, 28)
-        await sleep(200)
-        mc(hwnd, 1014, 380)
-        await sleep(200)
-        mc(hwnd, 1010, 379)
-    }
-    mc(hwnd, 999, 506)
-    await sleep(500)
-    mt(hwnd)
-    await sleep(500)
+    mc(hwnd, 1318, 815)
+    await sleep(800)
+    mc(hwnd, 942, 501)
+    await sleep(800)
 }
 
 const xtimer = setInterval(async () => {
@@ -560,7 +555,7 @@ const ftimer = setInterval(async () => {
     if (autoAimX || autoAimY) {
         const door = findYellow(frame)
         if (door) {
-            drawBorder(hwnd, ...door.match.bbox)
+            // drawBorder(hwnd, ...door.match.bbox)
             const numroi = frame.roi(door.match.bbox[0] - 10, door.match.bbox[1] + door.match.bbox[3] + 7, 30, 15)
             const d = +numocr(numroi)
             if (d) {
@@ -618,11 +613,14 @@ async function main() {
         switch (state) {
             case "pre":
                 i = 0
-                if (isFirstMap || !config.onlyL1) await moveLoop(state)
-                else if (config.preBuff) {
-                    await sleep(300)
+                if (isFirstMap || !config.onlyL1) {
+                    await moveLoop(state)
+                    await sleep(600)
                     await useSkill("q2")
-                    if (config.useQ1B) await useSkill("q1")
+                    await sleep(1000)
+                } else if (config.preBuff) {
+                    await sleep(config.preBuffDelay)
+                    await battleLoop("battle")
                 }
                 break
             case "battle":
