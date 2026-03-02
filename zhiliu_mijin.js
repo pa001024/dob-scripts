@@ -3,13 +3,15 @@
 // @name zhiliu_mijin
 // @description 止流迷津
 // @author pa
-// @version 1.2.1
+// @version 1.2.2
 // @category 其他
-// @date 2026/3/1 11:35:19
+// @date 2026/3/1 17:48:42
 // ==/UserScript==
 
 // 说明: 键位和视角设置全默认(!!!!) 视距1.3
 // 止流带专武赘生雷月卡/球球蜂 不推荐带防御魔灵 打慢了缺蓝直接寄 潜质攻击减CD复活
+// 难度根据情况选 6命选270/300 2命选240
+// 密码: 6
 
 const config = {
     门顺序: readConfig(
@@ -24,6 +26,7 @@ const config = {
     useQ1: readConfig("搓BUFF", "Boss阶段是否释放Q1（6命别选）", "boolean", false),
     moveTimeout: readConfig("移动超时", "移动超时重置间隔(秒)", "number", 25),
     ftime: readConfig("帧间隔", "取帧间隔(毫秒)", "number", 25),
+    lock: readConfig("密码", "请查看说明以获取密码", "string"),
     /** @type {ROI} */ minimapLoc: [30, 35, 180, 180],
     /** @type {ROI} */ mainLoc: [290, 169, 1020, 514],
 }
@@ -128,14 +131,14 @@ function findColors(img, colors, names, threshold = 10, mode = "single") {
     for (const color of config.门顺序) {
         const match = matches.find(v => color === v.color)
         if (match) {
-            setStatus(
-                "door",
-                matches.map(v => v.door),
-                `${matches
-                    .map(v => v.color)
-                    .sort()
-                    .join(" ")} -> ${match.color}`
-            )
+            // setStatus(
+            //     "door",
+            //     matches.map(v => v.door),
+            //     `${matches
+            //         .map(v => v.color)
+            //         .sort()
+            //         .join(" ")} -> ${match.color}`
+            // )
             const windowCenter = [xOffset + config.mainLoc[2] / 2, yOffset + config.mainLoc[3] / 2]
             const dx = match.center[0] - windowCenter[0]
             const dy = match.center[1] - windowCenter[1]
@@ -380,17 +383,25 @@ function checkState(frame) {
                         }
                     }
                 } else {
-                    if (cc(frame, 640, 850, 0x8fd19e, 10)) {
-                        return "esc"
+                    if (cc(frame, 688, 474, 0x000000, 10)) {
+                        if (!cc(frame, 1537, 871, 0x000000, 10)) {
+                            return "buff"
+                        }
                     } else {
-                        if (cc(frame, 688, 474, 0x000000, 10)) {
-                            if (!cc(frame, 1537, 871, 0x000000, 10)) {
-                                return "buff"
-                            }
+                        if (cc(frame, 640, 850, 0x8fd19e, 10)) {
+                            return "esc"
                         } else {
-                            if (cc(frame, 1263, 46, 0xffffff, 10)) {
-                                if (cc(frame, 1274, 46, 0x0b0b18, 10)) {
+                            if (cc(frame, 1274, 46, 0x0b0b18, 10)) {
+                                if (cc(frame, 1263, 46, 0xffffff, 10)) {
                                     return "shop"
+                                } else {
+                                    if (
+                                        !cc(frame, 1537, 871, 0x000000, 10) &&
+                                        cc(frame, 47, 39, 0xffffff, 10) &&
+                                        cc(frame, 48, 209, 0xfefefe, 10)
+                                    ) {
+                                        return "home"
+                                    }
                                 }
                             } else {
                                 if (cc(frame, 1115, 818, 0xfafafa, 10)) {
@@ -914,62 +925,6 @@ function getMP(frame) {
     // if (mpf) setStatus("mp", roi, mpf)
     return mpf
 }
-const xtimer = setInterval(async () => {
-    kb(hwnd, "x")
-}, 2e3)
-
-const ftimer = setInterval(() => {
-    frame = captureWindowWGC(hwnd)
-    gameState.mp = getMP(frame)
-    gameState.state = checkState(frame)
-    if (gameState.state === "buff") {
-        mc(hwnd, 1456, 808)
-    }
-    if (autoAimX || autoAimY) {
-        const door = findFn(frame)
-        if (door) {
-            let md = 0
-            // drawBorder(hwnd, ...door.match.bbox)
-            if (door.out) {
-                const mDoor = findDoorMinimap(frame)
-                if (mDoor && mDoor.match.color === door.match.color && mDoor.distance > 15) {
-                    setStatus(
-                        "route",
-                        frame.roi(...mDoor.match.bbox),
-                        `小地图寻路${autoAimX ? "X" : ""}${autoAimY ? "Y" : ""}: ${~~mDoor.angle}°, ${~~mDoor.distance}m`
-                    )
-                    const roiMat = frame.roi(30, 35, 180, 180)
-                    const rotation = predictRotation(roiMat)
-                    const delta = ((rotation - mDoor.angle + 180) % 360) - 180
-                    if (delta > 30) {
-                        turn(-Math.sign(delta) * Math.max(Math.abs(delta), 1))
-                        // console.log("mm旋转", delta)
-                        return
-                    }
-                    gameState.angle = mDoor.angle
-                    md = gameState.distance = mDoor.distance
-                }
-            }
-            const numroi = frame.roi(door.match.bbox[0] - 4, door.match.bbox[1] + door.match.bbox[3] + 7, 24, 15)
-            const d = +numocr(numroi)
-            gameState.distance = Number.isFinite(d) ? d : md
-            setStatus("route", `寻路${autoAimX ? "X" : ""}${autoAimY ? "Y" : ""}: ${~~door.dx}, ${~~door.dy}, ${gameState.distance}m`)
-            const first = projectOffsetToMm(door.dx, door.dy + autoAimoffsetY, { out: door.out, rawDy: door.dy })
-            let fastX = clamp(first.mmx, -320, 320)
-            let fastY = clamp(first.mmy, -320, 320)
-            if (Math.abs(fastX) < 5) fastX = 0
-            if (Math.abs(fastY) < 5) fastY = 0
-            gameState.dx = first.mmx
-            gameState.dy = first.mmy
-            mm(autoAimX ? fastX : 0, autoAimY || door.out ? fastY : 0)
-        } else {
-            gameState.distance = 0
-            turn(1)
-        }
-    } else {
-        setStatus("route")
-    }
-}, config.ftime)
 
 async function waitF(timeout = 5e3) {
     const timer = new Timer()
@@ -991,6 +946,66 @@ function checkF() {
 }
 
 async function main() {
+    if (config.lock !== "6") {
+        console.error("请查看文件开头的说明并填写密码")
+        return
+    }
+    const xtimer = setInterval(async () => {
+        kb(hwnd, "x")
+    }, 2e3)
+
+    const ftimer = setInterval(() => {
+        frame = captureWindowWGC(hwnd)
+        gameState.mp = getMP(frame)
+        gameState.state = checkState(frame)
+        if (gameState.state === "buff") {
+            mc(hwnd, 1456, 808)
+        }
+        if (autoAimX || autoAimY) {
+            const door = findFn(frame)
+            if (door) {
+                let md = 0
+                // drawBorder(hwnd, ...door.match.bbox)
+                if (door.out) {
+                    const mDoor = findDoorMinimap(frame)
+                    if (mDoor && mDoor.match.color === door.match.color && mDoor.distance > 15) {
+                        setStatus(
+                            "route",
+                            frame.roi(...mDoor.match.bbox),
+                            `小地图寻路${autoAimX ? "X" : ""}${autoAimY ? "Y" : ""}: ${~~mDoor.angle}°, ${~~mDoor.distance}m`
+                        )
+                        const roiMat = frame.roi(30, 35, 180, 180)
+                        const rotation = predictRotation(roiMat)
+                        const delta = ((rotation - mDoor.angle + 180) % 360) - 180
+                        if (delta > 30) {
+                            turn(-Math.sign(delta) * Math.max(Math.abs(delta), 1))
+                            // console.log("mm旋转", delta)
+                            return
+                        }
+                        gameState.angle = mDoor.angle
+                        md = gameState.distance = mDoor.distance
+                    }
+                }
+                const numroi = frame.roi(door.match.bbox[0] - 4, door.match.bbox[1] + door.match.bbox[3] + 7, 24, 15)
+                const d = +numocr(numroi)
+                gameState.distance = Number.isFinite(d) ? d : md
+                setStatus("route", `寻路${autoAimX ? "X" : ""}${autoAimY ? "Y" : ""}: ${~~door.dx}, ${~~door.dy}, ${gameState.distance}m`)
+                const first = projectOffsetToMm(door.dx, door.dy + autoAimoffsetY, { out: door.out, rawDy: door.dy })
+                let fastX = clamp(first.mmx, -320, 320)
+                let fastY = clamp(first.mmy, -320, 320)
+                if (Math.abs(fastX) < 5) fastX = 0
+                if (Math.abs(fastY) < 5) fastY = 0
+                gameState.dx = first.mmx
+                gameState.dy = first.mmy
+                mm(autoAimX ? fastX : 0, autoAimY || door.out ? fastY : 0)
+            } else {
+                gameState.distance = 0
+                turn(1)
+            }
+        } else {
+            setStatus("route")
+        }
+    }, config.ftime)
     setForegroundWindow(hwnd)
     await sleep(100)
     await moveTo(hwnd, 200, 1, 100)
@@ -1007,6 +1022,16 @@ async function main() {
         autoAimX = false
         if (state !== "unknown") i = 0
         switch (state) {
+            case "home":
+                await kb(hwnd, "esc")
+                await sleep(1e3)
+                mc(hwnd, 153, 454)
+                await sleep(1e3)
+                mc(hwnd, 893, 28)
+                await sleep(1e3)
+                mc(hwnd, 889, 595)
+                await sleep(1200)
+                break
             case "door":
             case "event":
                 findFn = state === "door" ? findDoor : findYellow

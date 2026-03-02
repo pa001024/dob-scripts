@@ -486,10 +486,12 @@ async function main() {
                 break
             case "next": {
                 const secs = timer.elapsed() / 1e3
-                timer.reset()
-                console.info(`完成 ${++finished}次 用时 ${~~(secs / 60)}分${~~(secs % 60)}秒`)
+                if (secs > 10) {
+                    timer.reset()
+                    console.info(`完成 ${++finished}次 用时 ${~~(secs / 60)}分${~~(secs % 60)}秒`)
+                }
                 mc(hwnd, 1020, 624)
-                await sleep(1500)
+                await sleep(1000)
                 break
             }
             case "battle2":
