@@ -3,9 +3,9 @@
 // @name zhiliu_mijin
 // @description 止流迷津
 // @author pa
-// @version 1.2.2
+// @version 1.2.3
 // @category 其他
-// @date 2026/3/1 17:48:42
+// @date 2026/3/17 02:09:07
 // ==/UserScript==
 
 // 说明: 键位和视角设置全默认(!!!!) 视距1.3
@@ -24,9 +24,11 @@ const config = {
         ["黄", "蓝", "大红", "小红"]
     ),
     useQ1: readConfig("搓BUFF", "Boss阶段是否释放Q1（6命别选）", "boolean", false),
+    useTripleDoorBuffer: readConfig("三重缓冲", "一定程度上降低找门抖动", "boolean", true),
     moveTimeout: readConfig("移动超时", "移动超时重置间隔(秒)", "number", 25),
-    ftime: readConfig("帧间隔", "取帧间隔(毫秒)", "number", 25),
+    ftime: readConfig("帧间隔", "取帧间隔(毫秒)", "number", 100),
     lock: readConfig("密码", "请查看说明以获取密码", "string"),
+    debug: readConfig("debug", "-", "boolean", false),
     /** @type {ROI} */ minimapLoc: [30, 35, 180, 180],
     /** @type {ROI} */ mainLoc: [290, 169, 1020, 514],
 }
@@ -43,6 +45,34 @@ let autoAimX = false
 let autoAimY = false
 const autoAimoffsetY = -150
 let findFn = findDoor
+/** @typedef {NonNullable<ReturnType<typeof findDoor>>} DoorInfo */
+/** @type {DoorInfo[]} */
+const doorTripleBuffer = []
+let bufferedFindFn = findFn
+
+/**
+ * 门识别三重缓冲：
+ * - 当前帧无门：不写入、不清空，直接返回空
+ * - 缓冲不足3帧：直接返回当前帧结果
+ * - 缓冲满3帧后：仅当最近3帧目标颜色一致时才输出
+ * @param {DoorInfo | undefined} rawDoor
+ * @returns {DoorInfo | undefined}
+ */
+function getBufferedDoor(rawDoor) {
+    if (!rawDoor) {
+        return
+    }
+
+    doorTripleBuffer.push(rawDoor)
+    if (doorTripleBuffer.length > 3) doorTripleBuffer.shift()
+    if (doorTripleBuffer.length < 3) return rawDoor
+
+    const c0 = doorTripleBuffer[0].match.color
+    const c1 = doorTripleBuffer[1].match.color
+    const c2 = doorTripleBuffer[2].match.color
+    if (c0 !== c1 || c1 !== c2) return
+    return doorTripleBuffer[2]
+}
 const gameState = {
     dx: 0,
     dy: 0,
@@ -131,14 +161,15 @@ function findColors(img, colors, names, threshold = 10, mode = "single") {
     for (const color of config.门顺序) {
         const match = matches.find(v => color === v.color)
         if (match) {
-            // setStatus(
-            //     "door",
-            //     matches.map(v => v.door),
-            //     `${matches
-            //         .map(v => v.color)
-            //         .sort()
-            //         .join(" ")} -> ${match.color}`
-            // )
+            if (config.debug)
+                setStatus(
+                    "door",
+                    matches.map(v => v.door),
+                    `${matches
+                        .map(v => v.color)
+                        .sort()
+                        .join(" ")} -> ${match.color}`
+                )
             const windowCenter = [xOffset + config.mainLoc[2] / 2, yOffset + config.mainLoc[3] / 2]
             const dx = match.center[0] - windowCenter[0]
             const dy = match.center[1] - windowCenter[1]
@@ -394,14 +425,6 @@ function checkState(frame) {
                             if (cc(frame, 1274, 46, 0x0b0b18, 10)) {
                                 if (cc(frame, 1263, 46, 0xffffff, 10)) {
                                     return "shop"
-                                } else {
-                                    if (
-                                        !cc(frame, 1537, 871, 0x000000, 10) &&
-                                        cc(frame, 47, 39, 0xffffff, 10) &&
-                                        cc(frame, 48, 209, 0xfefefe, 10)
-                                    ) {
-                                        return "home"
-                                    }
                                 }
                             } else {
                                 if (cc(frame, 1115, 818, 0xfafafa, 10)) {
@@ -425,6 +448,9 @@ function checkState(frame) {
                 }
             }
         }
+    }
+    if (cc(frame, 47, 39, 0xffffff, 10) && cc(frame, 48, 209, 0xfefefe, 10)) {
+        return "home"
     }
     if (matchHammingHash(perceptualHash(frame.roi(718, 72, 38, 37)), ["778eb05ec974b600"], 10) >= 0) return "finish"
     return "unknown"
@@ -715,7 +741,7 @@ async function moveLoop(type = "door") {
         if (gameState.distance > 20 || (gameState.distance > 10 && gameState.dy < -30) || gameState.dy < -220) {
             autoAimX = false
             const yew = gameState.distance > 29 ? -45 : gameState.distance > 20 ? -25 : -12
-            // console.log(`远距离移动: d=${gameState.distance} yew=${yew}`)
+            // if (config.debug) console.log(`远距离移动: d=${gameState.distance} yew=${yew}`)
             await rollAbs(yew)
             await kb(hwnd, "4")
             await sleep(500)
@@ -739,13 +765,14 @@ async function moveLoop(type = "door") {
                 await kb(hwnd, "shift")
                 shiftcd.reset()
             }
-            if (gameState.distance > 0 && Math.abs(lastd - gameState.distance) < 1.5) {
+            if (Math.abs(lastd - gameState.distance) < 1.5) {
                 if (notMoved.elapsed() > 2500) {
                     await kb(hwnd, "space")
                     await sleep(300)
                     await kb(hwnd, "space")
+                    notMoved.reset()
                 }
-            } else {
+            } else if (gameState.distance > 0) {
                 notMoved.reset()
             }
             await waitF(500)
@@ -962,10 +989,15 @@ async function main() {
             mc(hwnd, 1456, 808)
         }
         if (autoAimX || autoAimY) {
-            const door = findFn(frame)
+            if (bufferedFindFn !== findFn) {
+                bufferedFindFn = findFn
+                doorTripleBuffer.length = 0
+            }
+            const rawDoor = findFn(frame)
+            const door = config.useTripleDoorBuffer ? getBufferedDoor(rawDoor) : rawDoor
             if (door) {
                 let md = 0
-                // drawBorder(hwnd, ...door.match.bbox)
+                if (config.debug) drawBorder(hwnd, ...door.match.bbox)
                 if (door.out) {
                     const mDoor = findDoorMinimap(frame)
                     if (mDoor && mDoor.match.color === door.match.color && mDoor.distance > 15) {
@@ -1003,6 +1035,7 @@ async function main() {
                 turn(1)
             }
         } else {
+            doorTripleBuffer.length = 0
             setStatus("route")
         }
     }, config.ftime)
@@ -1055,8 +1088,10 @@ async function main() {
                 break
             case "finish": {
                 const secs = timer.elapsed() / 1e3
-                timer.reset()
-                console.info(`完成 ${++finished}次 用时 ${~~(secs / 60)}分${~~(secs % 60)}秒`)
+                if (secs > 5) {
+                    timer.reset()
+                    console.info(`完成 ${++finished}次 用时 ${~~(secs / 60)}分${~~(secs % 60)}秒`)
+                }
                 mc(hwnd)
                 await sleep(1500)
                 break
@@ -1074,6 +1109,12 @@ async function main() {
             default:
                 if (state.includes("battle")) await battleLoop(state)
                 break
+        }
+        // 超时
+        if (timer.elapsed() > 10 * 60e3) {
+            console.error("循环超时")
+            await exitAction()
+            timer.reset()
         }
         await sleep(100)
     }

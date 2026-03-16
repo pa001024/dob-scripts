@@ -102,7 +102,7 @@ function main() {
 try {
     main()
 } catch (error) {
-    const message = String(error?.message ? error.message : error)
+    const message = error instanceof Error ? error.message : String(error)
     console.error("[validate] failed:", message)
     setStatus("小地图验证", `执行失败: ${message}`)
     throw error

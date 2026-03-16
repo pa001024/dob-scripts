@@ -5,44 +5,61 @@
 // @author pa
 // @version 1.0.0
 // @category 开发工具
-// @date 2026/3/1 20:50:55
+// @date 2026/3/15 22:19:29
 // ==/UserScript==
 
-const hwnd = getWindowByProcessName("EM-Win64-Shipping.exe")
-if (!hwnd || !isElevated()) throw new Error("未找到窗口或非管理员权限")
+const cloud = readConfig("cloud", "云游戏", "boolean", false)
+const hwnd = cloud ? getCGWindow() : getWindowByProcessName("EM-Win64-Shipping.exe")
+if (!hwnd) throw new Error("未找到窗口")
 checkSize(hwnd)
 
 /** @param {Mat} frame */
 function checkState(frame) {
-    if (cc(frame, 46, 274, 0xffffc2, 10)) {
-        if (cc(frame, 85, 354, 0x000000, 10)) {
+    if (cc(frame, 666, 665, 0x040403, 10)) {
+        return "buff"
+    } else {
+        if (cc(frame, 239, 403, 0x000015, 10)) {
             return "battle"
         } else {
-            return "pre"
-        }
-    } else {
-        if (cc(frame, 1044, 795, 0xe1b454, 10)) {
-            return "finish"
-        } else {
-            if (cc(frame, 348, 285, 0x000000, 10)) {
-                if (cc(frame, 508, 623, 0x34a981, 10)) {
-                    return "next"
+            if (cc(frame, 54, 334, 0xfbf9a7, 10)) {
+                if (cc(frame, 56, 368, 0xf4fefe, 10)) {
+                    return "door2"
                 } else {
-                    return "confirm"
+                    if (cc(frame, 306, 337, 0xfdffff, 10)) {
+                        return "event"
+                    } else {
+                        return "door"
+                    }
                 }
             } else {
-                if (cc(frame, 167, 353, 0x000000, 10)) {
-                    if (cc(frame, 34, 358, 0x000000, 10)) {
-                        return "battle2"
-                    } else {
-                        return "enter"
-                    }
+                if (cc(frame, 53, 337, 0xec3335, 20)) {
+                    return "event2"
                 } else {
-                    if (cc(frame, 1479, 799, 0xffffff, 10)) {
-                        return "esc"
+                    if (cc(frame, 1492, 862, 0x000001, 10)) {
+                        if (cc(frame, 1522, 866, 0x26241f, 10)) {
+                            if (cc(frame, 1356, 870, 0x050205, 10)) {
+                                return "esc"
+                            } else {
+                                return "enter"
+                            }
+                        } else {
+                            if (cc(frame, 1192, 52, 0xfffffe, 10)) {
+                                return "shop"
+                            }
+                        }
                     } else {
-                        if (cc(frame, 474, 371, 0x000000, 10)) {
-                            return "escconfirm"
+                        if (cc(frame, 472, 76, 0x010002, 10)) {
+                            if (cc(frame, 483, 73, 0xfd3f3e, 10)) {
+                                return "battle_boss"
+                            }
+                        } else {
+                            if (cc(frame, 1019, 797, 0xffffff, 10)) {
+                                return "esc"
+                            } else {
+                                if (cc(frame, 407, 359, 0x000000, 10) && cc(frame, 837, 505, 0xd9b360, 10)) {
+                                    return "esc_menu"
+                                }
+                            }
                         }
                     }
                 }
@@ -56,10 +73,12 @@ async function main() {
     const timer = new Timer()
     while (true) {
         const frame = captureWindowWGC(hwnd)
-        const state=  checkState(frame)
-        setStatus("结果", state)
-        if(state!=="unknown"&& state!=="door") {
-            imwrite(state+".png",frame)
+        const state = checkState(frame)
+        setStatus("result", state)
+        setStatus("img", frame)
+        // imshow("1", frame)
+        if (state !== "unknown") {
+            // imwrite(state+".png",frame)
         }
         i++
         if (timer.elapsed() > 1000) {

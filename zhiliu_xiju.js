@@ -5,11 +5,11 @@
 // @author pa
 // @version 1.0.0
 // @category 其他
-// @date 2026/2/28 11:59:04
+// @date 2026/3/11 17:48:59
 // ==/UserScript==
 
 // 止流带专武裂魂雷月卡/球球蜂
-// 队友扶疏黎瑟
+// 队友扶疏煜明
 // 进去再开 不识别外面的界面
 
 const config = {
@@ -469,6 +469,7 @@ async function battleLoop(state) {
     await kb(hwnd, "w", 30)
     await useSkill("q2")
     await useSkill("z")
+    const qtimer = new Timer()
     if (state === "boss" ? config.useQ1 : config.useQ1B) {
         await useSkill("q1")
     }
@@ -481,13 +482,14 @@ async function battleLoop(state) {
             mt(hwnd)
             return
         }
-        if (frame.get_hsl(782, 822)[2] < 0.7 || timer.elapsed() > 35e3) {
+        if ((qtimer.elapsed() > 6e3 && frame.get_hsl(782, 822)[2] < 0.7) || timer.elapsed() > 35e3) {
             await useSkill("q2")
             await useSkill("z")
             if (state2 === "boss" ? config.useQ1 : config.useQ1B) {
                 await useSkill("q1")
             }
             timer.reset()
+            qtimer.reset()
         } else if (gameState.mp > 20) {
             mt(hwnd) // 锁定BOSS
             await sleep(300)
@@ -543,7 +545,7 @@ function getMP(frame) {
     const roi = frame.roi(1302, 859, 243, 4)
     const p = roi.find_bright(243, 2, 243, 150, 0, ">", "rtl")
     const mp = p ? Math.round(p[0] / 2.42) : 0
-    setStatus("mp", roi, mp)
+    // setStatus("mp", roi, mp)
     return mp
 }
 const ftimer = setInterval(async () => {
@@ -553,6 +555,7 @@ const ftimer = setInterval(async () => {
     currentSkill = checkSkill(frame)
     setStatus("skill", currentSkill)
     if (autoAimX || autoAimY) {
+        kb(hwnd, "f")
         const door = findYellow(frame)
         if (door) {
             // drawBorder(hwnd, ...door.match.bbox)
@@ -576,7 +579,7 @@ const ftimer = setInterval(async () => {
     } else {
         setStatus("route")
     }
-}, 20)
+}, 100)
 
 async function waitF(timeout = 5e3) {
     const timer = new Timer()
@@ -631,8 +634,10 @@ async function main() {
             case "finish": {
                 isFirstMap = true
                 const secs = timer.elapsed() / 1e3
-                timer.reset()
-                console.info(`完成 ${++finished}次 用时 ${~~(secs / 60)}分${~~(secs % 60)}秒`)
+                if (secs > 5) {
+                    timer.reset()
+                    console.info(`完成 ${++finished}次 用时 ${~~(secs / 60)}分${~~(secs % 60)}秒`)
+                }
                 mc(hwnd, 1476, 846)
                 await sleep(1500)
                 break

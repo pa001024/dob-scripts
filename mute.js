@@ -5,7 +5,7 @@
 // @author pa
 // @version 1.0.0
 // @category 其他
-// @date 2026/2/18 12:18:44
+// @date 2026/3/4 22:00:01
 // ==/UserScript==
 
 const enable = readConfig("静音", "静音进程 仅影响单个程序 不勾选取消静音", "boolean", true)

@@ -64,7 +64,11 @@ const ITEM_HASHES = [
 ]
 
 const itemOptions = Array.from(new Set(ITEM_HASHES.map(v => v.name)))
-const selectedItems = readConfig("物品", "允许提交的物品", { type: "multi-select", options: itemOptions }, itemOptions)
+let selectedItems = readConfig("物品", "允许提交的物品", { type: "multi-select", options: itemOptions }, itemOptions)
+if (selectedItems.length === 0) {
+    selectedItems = itemOptions
+    setConfig("物品", selectedItems)
+}
 const selectedSet = new Set(selectedItems)
 const allowHashes = ITEM_HASHES.filter(v => selectedSet.has(v.name)).map(v => v.hash)
 

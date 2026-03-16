@@ -515,6 +515,103 @@ declare function moveWindow(hwnd: number, x: number, y: number, w?: number, h?: 
 declare function getForegroundWindow(): number
 
 /**
+ * 获取 cloudgame 窗口句柄
+ *
+ * 注意：
+ * - 仅桌面主应用脚本运行时可用；
+ * - `dob-script-cli` 独立编译模式下不可用，调用前请自行判定运行环境；
+ * - 云游戏窗口未打开时返回 `0`。
+ * @returns cloudgame 窗口句柄
+ */
+declare function getCGWindow(): number
+
+/**
+ * 按 cloudgame 页面业务层事件链发送相对鼠标移动
+ *
+ * 注意：
+ * - 仅桌面主应用脚本运行时可用；
+ * - `dob-script-cli` 独立编译模式下不可用；
+ * - 该函数不走本机 Windows 鼠标输入，而是直接进入 cloudgame 页面业务层 `mousemove/pointerrawupdate` 处理链。
+ * @param dx X 方向相对位移
+ * @param dy Y 方向相对位移
+ */
+declare function cgMove(dx: number, dy: number): void
+
+/**
+ * 按 cloudgame 页面业务层事件链发送绝对鼠标移动（异步）
+ *
+ * 注意：
+ * - 仅桌面主应用脚本运行时可用；
+ * - `dob-script-cli` 独立编译模式下不可用。
+ * @param x 目标 X 坐标
+ * @param y 目标 Y 坐标
+ * @param duration 移动前等待时间（毫秒），默认 0
+ */
+declare function cgMoveTo(x: number, y: number, duration?: number): Promise<void>
+
+/**
+ * 按 cloudgame 页面业务层事件链发送鼠标点击
+ *
+ * 注意：
+ * - 仅桌面主应用脚本运行时可用；
+ * - `dob-script-cli` 独立编译模式下不可用。
+ * @param x 目标 X 坐标
+ * @param y 目标 Y 坐标
+ * @param button 鼠标按键，可选，默认 `left`
+ */
+declare function cgClick(x?: number, y?: number, button?: "left" | "right" | "middle" | "x1" | "x2" | "l" | "r" | "m"): void
+
+/**
+ * 按 cloudgame 页面业务层事件链发送鼠标按下
+ * @param x 目标 X 坐标
+ * @param y 目标 Y 坐标
+ * @param button 鼠标按键，可选，默认 `left`
+ */
+declare function cgDown(x?: number, y?: number, button?: "left" | "right" | "middle" | "x1" | "x2" | "l" | "r" | "m"): void
+
+/**
+ * 按 cloudgame 页面业务层事件链发送鼠标抬起
+ * @param x 目标 X 坐标
+ * @param y 目标 Y 坐标
+ * @param button 鼠标按键，可选，默认 `left`
+ */
+declare function cgUp(x?: number, y?: number, button?: "left" | "right" | "middle" | "x1" | "x2" | "l" | "r" | "m"): void
+
+/**
+ * 按 cloudgame 页面业务层事件链发送中键点击
+ * @param x 目标 X 坐标
+ * @param y 目标 Y 坐标
+ */
+declare function cgMiddleClick(x?: number, y?: number): void
+
+/**
+ * 按 cloudgame 页面业务层事件链发送滚轮
+ * @param x 目标 X 坐标
+ * @param y 目标 Y 坐标
+ * @param delta 滚轮增量，常用 120 / -120
+ */
+declare function cgWheel(x?: number, y?: number, delta?: number): void
+
+/**
+ * 按 cloudgame 页面业务层事件链发送按键点击（异步）
+ * @param key 按键名称
+ * @param duration 按住时长（毫秒），默认 0
+ */
+declare function cgKey(key: KeyEnum, duration?: number): Promise<void>
+
+/**
+ * 按 cloudgame 页面业务层事件链发送按键按下
+ * @param key 按键名称
+ */
+declare function cgKeyDown(key: KeyEnum): void
+
+/**
+ * 按 cloudgame 页面业务层事件链发送按键抬起
+ * @param key 按键名称
+ */
+declare function cgKeyUp(key: KeyEnum): void
+
+/**
  * 检查当前进程是否以管理员权限运行
  * @returns true 表示管理员权限，false 表示非管理员权限
  */
@@ -726,10 +823,10 @@ declare function dllCall(func: number | string | { Ptr: number }, ...typeAndValu
  * 色键过滤并返回灰度二值图
  * @param mat 源图像 Mat
  * @param colors 色键数组（例如 [0xffffff, 0xff0000]）
- * @param tolerance 颜色容差（0-255）
+ * @param tolerance 颜色容差（0-255），可传单个数值或与 `colors` 一一对应的数值数组
  * @returns 灰度二值图 Mat（命中为255，未命中为0）
  */
-declare function colorFilter(mat: Mat, colors: number[], tolerance: number): Mat
+declare function colorFilter(mat: Mat, colors: number[], tolerance: number | number[]): Mat
 
 /**
  * 使用 HSL 加权差进行色键过滤并返回灰度二值图
@@ -746,10 +843,10 @@ declare function colorFilterHSL(mat: Mat, colors: number[], tolerance: number, w
  * @param mat 源图像 Mat
  * @param colors 色键数组（例如 [0xffffff, 0xff0000]）
  * @param minMean 最小 mean 阈值（0-255），低于该值返回 -1，默认 0
- * @param tolerance 颜色容差（0-255），默认 0
+ * @param tolerance 颜色容差（0-255），可传单个数值或与 `colors` 一一对应的数值数组，默认 0
  * @returns 命中的最佳索引；未命中返回 -1
  */
-declare function colorKeyMatch(mat: Mat, colors: number[], minMean?: number, tolerance?: number): number
+declare function colorKeyMatch(mat: Mat, colors: number[], minMean?: number, tolerance?: number | number[]): number
 
 /**
  * 批量模板匹配（并行）
@@ -1094,3 +1191,10 @@ declare function predictDepth(
     minRegionArea?: number,
     maxCandidates?: number
 ): PredictDepthResult
+
+/**
+ * Lite-Mono 单目深度预测
+ * @param image 输入图像 Mat
+ * @returns 8 位相对深度图（值越大表示相对更近）
+ */
+declare function monoDepth(image: Mat): Promise<Mat>
