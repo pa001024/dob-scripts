@@ -5,7 +5,7 @@
 // @author pa
 // @version 1.2.3
 // @category 其他
-// @date 2026/3/17 02:09:07
+// @date 2026/3/29 05:30:54
 // ==/UserScript==
 
 // 说明: 键位和视角设置全默认(!!!!) 视距1.3
@@ -29,15 +29,13 @@ const config = {
     ftime: readConfig("帧间隔", "取帧间隔(毫秒)", "number", 100),
     lock: readConfig("密码", "请查看说明以获取密码", "string"),
     debug: readConfig("debug", "-", "boolean", false),
+    battleTime: readConfig("战斗超时", "超时暂离(秒)", "number", 120) * 1e3,
     /** @type {ROI} */ minimapLoc: [30, 35, 180, 180],
     /** @type {ROI} */ mainLoc: [290, 169, 1020, 514],
 }
 
 const hwnd = getWindowByProcessName("EM-Win64-Shipping.exe")
-if (!hwnd || !isElevated()) {
-    console.log("未找到窗口或非管理员权限")
-    throw new Error("未找到窗口或非管理员权限")
-}
+if (!hwnd || !isElevated()) throw new Error("未找到窗口或非管理员权限")
 checkSize(hwnd)
 
 let frame = captureWindowWGC(hwnd)
@@ -804,6 +802,7 @@ async function battleLoop(state) {
     setStatus("fn", "battleLoop")
     ku(hwnd, "w")
     const timer = new Timer()
+    const timer2 = new Timer()
     mt(hwnd) // 锁定BOSS
     await sleep(300)
     await kb(hwnd, "w", 30)
@@ -813,6 +812,10 @@ async function battleLoop(state) {
         await useSkill("q1")
     }
     while (checkStop()) {
+        if (config.battleTime < timer2.elapsed()) {
+            await exitAction(2)
+            return
+        }
         const state = gameState.state
         setStatus("state", state)
         const isBoss = state.includes("boss")
@@ -867,10 +870,12 @@ async function battleLoop(state) {
     }
 }
 
-async function exitAction() {
+async function exitAction(type = 1) {
     kb(hwnd, "esc", 33)
     await sleep(800)
-    mc(hwnd, 1498, 816)
+    if (type === 2)
+        mc(hwnd, 1358, 826) // 暂离
+    else mc(hwnd, 1498, 816) // 退出
     await sleep(500)
     mc(hwnd, 982, 501)
     await sleep(500)

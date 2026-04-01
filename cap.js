@@ -5,11 +5,10 @@
 // @author pa
 // @version 1.1.0
 // @category 开发工具
-// @date 2026/3/15 21:47:43
+// @date 2026/3/24 14:04:37
 // ==/UserScript==
 
-const cloud = readConfig("cloud", "云游戏", "boolean", false)
-const hwnd = cloud ? getCGWindow() : getWindowByProcessName("EM-Win64-Shipping.exe")
+const hwnd = getCGWindow() || getWindowByProcessName("EM-Win64-Shipping.exe")
 if (!hwnd) throw new Error("未找到窗口")
 checkSize(hwnd)
 
