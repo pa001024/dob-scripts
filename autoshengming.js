@@ -14,9 +14,7 @@
 /** @typedef {{name: string; hash: string}} ItemHash */
 /** @typedef {{rois: Mat[]; hashes: string[]; slotPass: boolean[]; cardPass: boolean[]; colorGate: boolean[]; cardReady: boolean[]}} AnalyzeResult */
 
-const PROCESS_NAME = "EM-Win64-Shipping.exe"
-const SINGLE_CAPTURE_MODE = false
-
+const SINGLE_CAPTURE_MODE = true
 const X_START = 202
 const X_OFFSET_CELL = 70
 const ROI_Y = 574
@@ -82,8 +80,9 @@ const refreshMaxTimes = readConfig("最大刷新次数", "-1 表示不限", "num
 const timeoutSec = readConfig("超时秒", "<=0 表示不限", "number", 300)
 const checkReputationCap = readConfig("检测声名上限", "numocr 检测 x/y 是否满", "boolean", true)
 const debugStatus = readConfig("调试状态", "显示 ROI 与哈希调试信息", "boolean", true)
+const frameless = readConfig("无边框", "无边框窗口", "boolean", false)
 
-const hwnd = getWindowByProcessName(PROCESS_NAME)
+const hwnd = getWindowByProcessName("EM-Win64-Shipping.exe")
 if (!hwnd || !isElevated()) throw new Error("未找到窗口或非管理员权限")
 checkSize(hwnd)
 

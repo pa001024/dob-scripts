@@ -5,10 +5,8 @@
 // @author pa
 // @version 1.0.0
 // @category 其他
-// @date 2026/3/23 23:38:59
+// @date 2026/2/24 13:08:36
 // ==/UserScript==
-
-// 别开自动波次
 
 const config = {
     useQ1: readConfig("搓BUFF", "是否释放Q1（6命别选）", "boolean", false),
@@ -29,7 +27,6 @@ const gameState = {
     distance: 0,
     angle: 0,
     mp: 0,
-    isWave: false,
 }
 function checkStop() {
     return true
@@ -370,13 +367,7 @@ function projectOffsetToMm(dx, dy, opts = {}) {
         mmy: Math.round(pitchDeg * autoAimModel.mmPerDegY),
     }
 }
-/**
- * 自动寻路
- */
-async function moveLoop() {
-    setStatus("fn", "moveLoop")
-    await runoks(hwnd, "jjb")
-}
+
 /**
  * 自动战斗
  */
@@ -384,12 +375,6 @@ async function battleLoop() {
     setStatus("fn", "battleLoop")
     const timer = new Timer()
     while (checkStop()) {
-        if (gameState.isWave) {
-            await useSkill("q2")
-            await useSkill("q2")
-            await useSkill("z")
-            gameState.isWave = false
-        }
         const state = checkState(frame)
         setStatus("state", state)
         if (state !== "battle" && state !== "battle2" && state !== "unknown") {
@@ -446,18 +431,13 @@ function getMP(frame) {
     const roi = frame.roi(1302, 859, 243, 4)
     const p = roi.find_bright(243, 2, 243, 150, 0, ">", "rtl")
     const mp = p ? Math.round(p[0] / 2.42) : 0
-    // setStatus("mp", roi, mp)
+    setStatus("mp", roi, mp)
     return mp
 }
 const ftimer = setInterval(async () => {
     if (!checkStop()) clearInterval(ftimer)
     frame = captureWindowWGC(hwnd)
     gameState.mp = getMP(frame)
-    // 检测小波倒计时
-    const roi = colorFilter(frame.roi(786, 185, 28, 51), [0xeaeae8], 30)
-    if ((matchHammingHash(perceptualHash(roi), ["1936cb9833669cd2"]), 10)) {
-        gameState.isWave = true
-    }
     if (autoAimX || autoAimY) {
         const door = findYellow(frame)
         if (door) {
@@ -499,19 +479,17 @@ async function main() {
         autoAimX = false
         switch (state) {
             case "pre":
-                await moveLoop(state)
+                // await moveLoop(state)
                 break
             case "battle":
                 await battleLoop()
                 break
             case "next": {
                 const secs = timer.elapsed() / 1e3
-                if (secs > 10) {
-                    timer.reset()
-                    console.info(`完成 ${++finished}次 用时 ${~~(secs / 60)}分${~~(secs % 60)}秒`)
-                }
+                timer.reset()
+                console.info(`完成 ${++finished}次 用时 ${~~(secs / 60)}分${~~(secs % 60)}秒`)
                 mc(hwnd, 1020, 624)
-                await sleep(1000)
+                await sleep(1500)
                 break
             }
             case "battle2":

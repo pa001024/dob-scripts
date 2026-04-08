@@ -1,11 +1,11 @@
 // ==UserScript==
 // @id PIsZFusRM5
 // @name autofishv2
-// @description 自动钓鱼V2 自动转点 纯后台
+// @description 自动钓鱼V2 自动转点 纯后台 1.3
 // @author pa
-// @version 2.0.2
+// @version 2.1.3
 // @category 其他
-// @date 2026/2/22 02:32:06
+// @date 2026/4/7 15:23:07
 // ==/UserScript==
 
 // 说明: 慎开联机 可能会挡住F键
@@ -19,15 +19,18 @@ const config = {
             options: [
                 "枯荣阁", // 13430
                 "百年春", // 12389
+                "东郊野外", // 12389
                 "微茫市", // 11606
                 "冰湖", // 11080
+                "城西区", // 10750
                 "净界岛", // 10112
                 "浮星埠", // 9959
                 "潮声岩穴", // 8937
                 "下水道", // 7584
+                "由来巷", // 7234
             ],
         },
-        ["枯荣阁", "百年春", "微茫市", "冰湖"]
+        ["枯荣阁", "百年春", "微茫市", "冰湖", "东郊野外"]
     ),
     鱼饵优先级: readConfig(
         "鱼饵优先级",
@@ -40,12 +43,46 @@ const config = {
     ),
     debug: false, // 不实际钓鱼
 }
-
-const hwnd = getWindowByProcessName("EM-Win64-Shipping.exe")
-if (!hwnd || !isElevated()) {
-    throw new Error("未找到窗口或非管理员权限")
+class Cap {
+    constructor() {
+        this.frameless = readConfig("无边框", "游戏启动中开启无标题栏", "boolean", false)
+        this.hwnd = getWindowByProcessName("EM-Win64-Shipping.exe")
+        if (!this.hwnd || !isElevated()) throw new Error("未找到窗口或非管理员权限")
+        this.yof = this.frameless ? 0 : 30
+        checkSize(this.hwnd, 1600, 900 + this.yof)
+        /** @type Mat */
+        this.frame = this.cap()
+    }
+    cap() {
+        this.frame = this.frameless ? captureWindowWGC(this.hwnd) : captureWindowWGC(this.hwnd, 0, 30, 1600, 900)
+        return this.frame
+    }
+    /** @param {number} x @param {number} y */
+    mc(x, y) {
+        return mc(this.hwnd, x, y + this.yof)
+    }
+    /**
+     * 按键操作（异步）
+     * @param {KeyEnum} key 按键名称
+     * @param {number} [duration] 按键持续时间
+     */
+    async kb(key, duration) {
+        await kb(this.hwnd, key, duration)
+    }
+    /**
+     * 等待窗口指定坐标颜色达到条件（异步）
+     * @param {number} x X坐标（窗口客户区）
+     * @param {number} y Y坐标（窗口客户区）
+     * @param {number} color 目标颜色（0xRRGGBB）
+     * @param {number} tolerance 容差（正数=等待符合，负数=等待不符合，按绝对值参与比较）
+     * @param {number} [timeout] 超时时间（毫秒），默认 20000
+     * @returns 命中条件返回 true，超时返回 false
+     */
+    async waitColor(x, y, color, tolerance, timeout) {
+        return await waitColor(this.hwnd, x, y + this.yof, color, tolerance, timeout)
+    }
 }
-checkSize(hwnd)
+const c = new Cap()
 
 /** 识别当前时间种类 @param {Mat} frame */
 function identifyTime(frame) {
@@ -87,6 +124,9 @@ async function changePool(name) {
         潮声岩穴: [2, 2],
         枯荣阁: [2, 3],
         微茫市: [2, 4],
+        东郊野外: [3, 0],
+        城西区: [3, 1],
+        由来巷: [3, 2],
     }
     currentPool = name
     setStatus("state", `转点(${name})`)
@@ -94,17 +134,17 @@ async function changePool(name) {
     const pool = pools[name]
     if (!pool) return false
     const [tab1, tab2] = pool
-    mc(hwnd, 111, 791)
+    c.mc(111, 791)
     await sleep(300)
-    mc(hwnd, 338 + 199 * tab1, 24) // 点击主标签
+    c.mc(338 + 199 * tab1, 24) // 点击主标签
     await sleep(300)
     if (tab2 >= 0) {
-        mc(hwnd, 231 + 164 * tab2, 147) // 点击次标签
+        c.mc(231 + 164 * tab2, 147) // 点击次标签
         await sleep(300)
     }
-    mc(hwnd, 1358, 770) // 点击追踪
+    c.mc(1358, 770) // 点击追踪
     await sleep(1000)
-    mc(hwnd, 1311, 781) // 传送
+    c.mc(1311, 781) // 传送
     await sleep(3000)
     await waitTP(name)
 }
@@ -122,6 +162,9 @@ async function checkPoolTime(name) {
         潮声岩穴: [2],
         枯荣阁: [0],
         微茫市: [2],
+        东郊野外: [0],
+        城西区: [2],
+        由来巷: [0, 1, 2],
     }
     currentAllowedTimes = pools[name]
     if (currentAllowedTimes.length === 3) return
@@ -129,7 +172,7 @@ async function checkPoolTime(name) {
     let valid = false
     while (timer.elapsed() < 2e3) {
         await sleep(500)
-        const frame = captureWindowWGC(hwnd)
+        const frame = c.cap()
         const time = identifyTime(frame)
         if (time) {
             valid = pools[name].includes(time.index)
@@ -138,23 +181,23 @@ async function checkPoolTime(name) {
     }
     if (!valid) {
         console.log(`${name}时间不符合设定: ${pools[name]}`)
-        kb(hwnd, "esc")
+        c.kb("esc")
         await sleep(800)
-        kb(hwnd, "esc")
+        c.kb("esc")
         await sleep(800)
-        mc(hwnd, 57, 417)
+        c.mc(57, 417)
         await adjustTime(["600", "1200", "2000"][currentAllowedTimes[0]])
         setStatus("fn", "checkPoolTime:after")
-        mc(hwnd, 1397, 789)
+        c.mc(1397, 789)
         await sleep(100)
         while (true) {
-            const frame = captureWindowWGC(hwnd)
+            const frame = c.cap()
             if (cc(frame, 954, 446, 0x000000, 5)) break
-            mc(hwnd, 1529, 873)
+            c.mc(1529, 873)
             await sleep(500)
-            kb(hwnd, "f")
+            c.kb("f")
         }
-        kb(hwnd, "f")
+        c.kb("f")
         await sleep(1000)
     }
 }
@@ -190,7 +233,7 @@ async function adjustTime(t = "600") {
     setStatus("fn", "adjustTime")
     const timer = new Timer()
     while (timer.elapsed() < 20e3) {
-        const frame = captureWindowWGC(hwnd)
+        const frame = c.cap()
         const roi = frame.roi(1451, 436, 72, 42)
         const timestr = timeocr(roi)
         setStatus("time", roi, timestr)
@@ -198,7 +241,7 @@ async function adjustTime(t = "600") {
             console.log("时间调整成功")
             return
         } else {
-            wheel(hwnd, 1488, 454, -120)
+            wheel(c.hwnd, 1488, 454, -120)
             await sleep(500)
         }
     }
@@ -209,32 +252,32 @@ async function gotoStartPoint() {
     setStatus("fn", "gotoStartPoint")
     setStatus("substate", `传送休憩之所`)
     do {
-        kb(hwnd, "m") // 打开地图
-    } while (!(await waitColor(hwnd, 25, 23, 0xffffce, 30, 1000)))
+        c.kb("m") // 打开地图
+    } while (!(await c.waitColor(25, 23, 0xffffce, 30, 1000)))
     do {
-        kb(hwnd, "h") // 休憩之所
-    } while (!(await waitColor(hwnd, 531, 379, 0x000000, 10, 1000)))
-    mc(hwnd, 953, 502) // 确定
+        c.kb("h") // 休憩之所
+    } while (!(await c.waitColor(531, 379, 0x000000, 10, 1000)))
+    c.mc(953, 502) // 确定
     await sleep(1000)
     setStatus("substate", `等待传送休憩之所`)
-    await waitColor(hwnd, 130, 860, 0x8fd19e, 10)
+    await c.waitColor(130, 860, 0x8fd19e, 10)
     setStatus("substate", `传送枯荣阁`)
-    kb(hwnd, "m") // 打开地图
-    await sleep(500)
-    mc(hwnd, 1397, 791) // 切换区域
-    await sleep(300)
-    mc(hwnd, 1378, 588) // 烟津渡
-    await sleep(300)
-    mc(hwnd, 1333, 412) // 烟津渡子
-    await sleep(300)
-    mc(hwnd, 1065, 210) // 枯荣阁
-    await sleep(100)
+    c.kb("m") // 打开地图
+    await sleep(800)
+    c.mc(1397, 791) // 切换区域
+    await sleep(800)
+    c.mc(1378, 588) // 烟津渡
+    await sleep(800)
+    c.mc(1333, 412) // 烟津渡子
+    await sleep(800)
+    c.mc(1065, 210) // 枯荣阁
+    await sleep(400)
     setStatus("substate", `等待传送按钮`)
-    await waitColor(hwnd, 1197, 780, 0xe1b454, 10)
+    await c.waitColor(1197, 780, 0xe1b454, 10)
     await sleep(100)
-    mc(hwnd, 1266, 777) // 传送
+    c.mc(1266, 777) // 传送
     await sleep(1000)
-    mc(hwnd, 1266, 777) // 传送
+    c.mc(1266, 777) // 传送
     await sleep(1000)
     await waitTP(`枯荣阁`)
 }
@@ -243,23 +286,23 @@ async function gotoStartPoint() {
 async function waitTP(name) {
     setStatus("state", `传送${name}`)
     setStatus("substate", `等待开始传送${name}`)
-    await waitColor(hwnd, 100, 863, 0x000000, 10)
+    await c.waitColor(100, 863, 0x000000, 10)
     setStatus("substate", `等待传送到达${name}`)
-    const result = await waitColor(hwnd, 130, 860, 0x8fd19e, 10, 60e3) // #8fd19e
+    const result = await c.waitColor(130, 860, 0x8fd19e, 10, 60e3) // #8fd19e
     console.log(`${name}传送${result ? "成功" : "失败"}`)
     if (!result) return false
     await sleep(1000)
-    if (currentPool === "冰湖") await kb(hwnd, "a", 200)
+    if (currentPool === "冰湖") await c.kb("a", 200)
     setStatus("substate", `往前走${name}`)
-    kd(hwnd, "w")
+    kd(c.hwnd, "w")
     if (await waitF(5e3)) {
         setStatus("substate")
         console.log(`${name}转点成功`)
-        ku(hwnd, "w")
+        ku(c.hwnd, "w")
         do {
-            kb(hwnd, "f")
+            c.kb("f")
             await sleep(1000)
-        } while (!(await waitColor(hwnd, 24, 22, 0xffffdc, 30))) // #ffffdc
+        } while (!(await c.waitColor(24, 22, 0xffffdc, 30))) // #ffffdc
         return true
     }
     console.log(`${name}转点失败`)
@@ -314,14 +357,14 @@ async function checkLure() {
     const priority = config.鱼饵优先级
     if (!priority.length) return
     setStatus("fn", "checkLure")
-    const frame = captureWindowWGC(hwnd)
+    const frame = c.cap()
     const roi = frame.roi(1529, 718, 36, 16)
     const num = +numocr(roi)
     setStatus("lure", roi, num)
     if (num >= 100) return
-    mc(hwnd, 1542, 710) // 切换鱼饵
+    c.mc(1542, 710) // 切换鱼饵
     await sleep(500)
-    const panelFrame = captureWindowWGC(hwnd)
+    const panelFrame = c.cap()
 
     const slots = lureTypes.map(slot => {
         const x = 652 + 94 * slot.index
@@ -344,10 +387,10 @@ async function checkLure() {
         selected = slots.filter(v => priority.includes(v.name)).reduce((best, cur) => (cur.stock > best.stock ? cur : best))
     }
 
-    mc(hwnd, selected.x, selected.y)
+    c.mc(selected.x, selected.y)
     await sleep(100)
-    mc(hwnd, 1350, 676) // 点击装备
-    kb(hwnd, "esc")
+    c.mc(1350, 676) // 点击装备
+    c.kb("esc")
     await sleep(500)
     console.log(`鱼饵自动更换为 ${selected.name} (${selected.stock}个)`)
     await sleep(1000)
@@ -357,7 +400,7 @@ let currentAllowedTimes = [0, 1, 2]
 let currentPool = "枯荣阁"
 const fishTimeout = new Timer()
 async function checkFinish() {
-    const frame = captureWindowWGC(hwnd)
+    const frame = c.cap()
     const roi = frame.roi(746, 286, 105, 18)
     const filterd = colorFilter(roi, [0xffffff], 10)
     const phash = perceptualHash(filterd)
@@ -366,7 +409,8 @@ async function checkFinish() {
     if (now) {
         if (now.locate === "fishing" && fishTimeout.elapsed() > 10e3) {
             console.log(`咬钩超时`)
-            kb(hwnd, "space") // 最后一条鱼超时
+            c.kb("space") // 最后一条鱼超时
+            await sleep(500)
         }
         if (!currentAllowedTimes.includes(now.index)) {
             return "changeTime"
@@ -375,7 +419,7 @@ async function checkFinish() {
         fishTimeout.reset()
     }
     if (!cc(frame, 51, 24, 0xffffff, 10)) {
-        await kb(hwnd, "space")
+        await c.kb("space")
     }
     const isNoLure = matchHammingHash(phash, ["a97a76369cc4e812"], 10) >= 0
     if (isNoLure) {
@@ -414,21 +458,21 @@ async function fishLoop() {
     while (!finished) {
         if (changeTime) {
             console.log(`检测到时间变动 暂退切换时间`)
-            kb(hwnd, "esc")
+            c.kb("esc")
             await sleep(1000)
             await checkPoolTime(currentPool)
             changeTime = false
         }
-        mc(hwnd, 1444, 779)
-        mc(hwnd, 1504, 794)
+        c.mc(1444, 779)
+        c.mc(1504, 794)
         await sleep(1000)
     }
     setStatus("substate", "退出钓鱼")
     while (true) {
         await sleep(500)
-        const frame = captureWindowWGC(hwnd)
+        const frame = c.cap()
         if (cc(frame, 51, 27, 0xffffff, 10)) {
-            kb(hwnd, "esc")
+            c.kb("esc")
             await sleep(2000)
         } else {
             break
@@ -441,7 +485,7 @@ async function waitF(t = 15000) {
     const timer = new Timer()
     while (timer.elapsed() < t) {
         await sleep(50)
-        const frame = captureWindowWGC(hwnd)
+        const frame = c.cap()
         const phash = perceptualHash(frame.roi(955, 442, 14, 16))
         const matched = matchHammingHash(phash, ["a6a69e19631c69e2"], 10) >= 0
         if (matched) {
@@ -452,14 +496,8 @@ async function waitF(t = 15000) {
 }
 
 async function main() {
-    const o = getForegroundWindow()
-    mt(hwnd)
-    await kb(hwnd, "f")
-    await sleep(100)
-    setForegroundWindow(o)
-
     // 检查是否已经在钓鱼界面
-    const frame = captureWindowWGC(hwnd)
+    const frame = c.cap()
     const time = identifyTime(frame)
     if (time || cc(frame, 51, 27, 0xffffff, 10)) {
         await fishLoop()

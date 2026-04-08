@@ -5,19 +5,19 @@
 // @author pa
 // @version 1.1.0
 // @category 开发工具
-// @date 2026/3/24 14:04:37
+// @date 2026/4/7 22:25:13
 // ==/UserScript==
 
 const hwnd = getCGWindow() || getWindowByProcessName("EM-Win64-Shipping.exe")
 if (!hwnd) throw new Error("未找到窗口")
-checkSize(hwnd)
+checkSize(hwnd, 1600, 930)
 
 async function main() {
     let i = readConfig("i", "文件计数", "number", 1)
     const t = readConfig("t", "截图间隔(ms) 设为0单次截图", "number", 1000)
     const timer = new Timer()
     while (true) {
-        const img = captureWindow(hwnd)
+        const img = captureWindow(hwnd, 0, 30, 1600, 900)
         imwrite(`imgs/cap${i}.png`, img)
         console.log(`imgs/cap${i}.png`)
         i++

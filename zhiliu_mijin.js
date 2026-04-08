@@ -1,11 +1,11 @@
 // ==UserScript==
 // @id JYVs5DxWME
 // @name zhiliu_mijin
-// @description 止流迷津
+// @description 止流迷津 1.3
 // @author pa
-// @version 1.2.3
+// @version 1.2.4
 // @category 其他
-// @date 2026/3/29 05:30:54
+// @date 2026/4/7 21:18:27
 // ==/UserScript==
 
 // 说明: 键位和视角设置全默认(!!!!) 视距1.3
@@ -28,17 +28,26 @@ const config = {
     moveTimeout: readConfig("移动超时", "移动超时重置间隔(秒)", "number", 25),
     ftime: readConfig("帧间隔", "取帧间隔(毫秒)", "number", 100),
     lock: readConfig("密码", "请查看说明以获取密码", "string"),
+    frameless: readConfig("无边框", "无边框窗口", "boolean", false),
     debug: readConfig("debug", "-", "boolean", false),
     battleTime: readConfig("战斗超时", "超时暂离(秒)", "number", 120) * 1e3,
     /** @type {ROI} */ minimapLoc: [30, 35, 180, 180],
     /** @type {ROI} */ mainLoc: [290, 169, 1020, 514],
 }
-
 const hwnd = getWindowByProcessName("EM-Win64-Shipping.exe")
 if (!hwnd || !isElevated()) throw new Error("未找到窗口或非管理员权限")
-checkSize(hwnd)
+const yof = config.frameless ? 0 : 30
+checkSize(hwnd, 1600, 900 + yof)
 
-let frame = captureWindowWGC(hwnd)
+function cap13() {
+    return config.frameless ? captureWindowWGC(hwnd) : captureWindowWGC(hwnd).roi(0, 30, 1600, 900)
+}
+/** @param {number} x @param {number} y */
+function rmc(x, y) {
+    return mc(hwnd, x, y + yof)
+}
+
+let frame = cap13()
 let autoAimX = false
 let autoAimY = false
 const autoAimoffsetY = -150
@@ -513,9 +522,7 @@ function turn(angle) {
  * @param {Mat} [frame] 窗口截图
  */
 async function turnAbs(angle, frame) {
-    if (!frame) {
-        frame = captureWindowWGC(hwnd)
-    }
+    if (!frame) frame = cap13()
     const roiMat = frame.roi(30, 35, 180, 180)
     const rotation = predictRotation(roiMat)
     const delta = ((rotation - angle + 180) % 360) - 180
@@ -822,7 +829,7 @@ async function battleLoop(state) {
         const isInv = state.includes("inv")
         if (state === "buff") {
             kb(hwnd, "esc")
-            mc(hwnd, 1456, 808)
+            rmc(1456, 808)
             await sleep(300)
             continue
         }
@@ -834,7 +841,7 @@ async function battleLoop(state) {
             mt(hwnd)
             return
         } else if (state === "unknown") {
-            mc(hwnd, 1456, 808)
+            rmc(1456, 808)
         }
         if (isBoss) {
             mt(hwnd) // 锁定BOSS
@@ -874,10 +881,10 @@ async function exitAction(type = 1) {
     kb(hwnd, "esc", 33)
     await sleep(800)
     if (type === 2)
-        mc(hwnd, 1358, 826) // 暂离
-    else mc(hwnd, 1498, 816) // 退出
+        rmc(1358, 826) // 暂离
+    else rmc(1498, 816) // 退出
     await sleep(500)
-    mc(hwnd, 982, 501)
+    rmc(982, 501)
     await sleep(500)
 }
 /** 重置 */
@@ -886,14 +893,14 @@ async function resetLoop(skip = false) {
     kb(hwnd, "esc", 33)
     await sleep(800)
     if (!skip) {
-        await moveC(hwnd, 1115, 820, 300)
+        await moveC(hwnd, 1115, 820 + yof, 300)
         await sleep(500)
-        await moveC(hwnd, 563, 28, 500)
-        await moveC(hwnd, 1014, 380, 500)
+        await moveC(hwnd, 563, 28 + yof, 500)
+        await moveC(hwnd, 1014, 380 + yof, 500)
         await sleep(200)
-        mc(hwnd, 1010, 379)
+        rmc(1010, 379)
     }
-    await moveC(hwnd, 999, 506, 100)
+    await moveC(hwnd, 999, 506 + yof, 100)
     await sleep(500)
     mt(hwnd)
     await sleep(500)
@@ -912,9 +919,9 @@ async function selectShopOption() {
     const roi = frame.roi(offsetX, offsetY, 43, 268)
     const match = await matchTemplate(roi, rewardTpl, 0.8)
     if (match) {
-        mc(hwnd, offsetX + match[0] + 10, offsetY + match[1] + 10)
+        rmc(offsetX + match[0] + 10, offsetY + match[1] + 10)
     } else {
-        mc(hwnd, 1022, 696)
+        rmc(1022, 696)
     }
     await sleep(100)
 }
@@ -987,11 +994,11 @@ async function main() {
     }, 2e3)
 
     const ftimer = setInterval(() => {
-        frame = captureWindowWGC(hwnd)
+        frame = cap13()
         gameState.mp = getMP(frame)
         gameState.state = checkState(frame)
         if (gameState.state === "buff") {
-            mc(hwnd, 1456, 808)
+            rmc(1456, 808)
         }
         if (autoAimX || autoAimY) {
             if (bufferedFindFn !== findFn) {
@@ -1046,7 +1053,7 @@ async function main() {
     }, config.ftime)
     setForegroundWindow(hwnd)
     await sleep(100)
-    await moveTo(hwnd, 200, 1, 100)
+    await moveTo(hwnd, 200, 1 + yof, 100)
     mt()
     await sleep(100)
 
@@ -1063,11 +1070,11 @@ async function main() {
             case "home":
                 await kb(hwnd, "esc")
                 await sleep(1e3)
-                mc(hwnd, 153, 454)
+                rmc(153, 454)
                 await sleep(1e3)
-                mc(hwnd, 893, 28)
+                rmc(893, 28)
                 await sleep(1e3)
-                mc(hwnd, 889, 595)
+                rmc(889, 595)
                 await sleep(1200)
                 break
             case "door":
@@ -1080,7 +1087,7 @@ async function main() {
                 await kb(hwnd, "space", 1000)
                 break
             case "esc_menu":
-                mc(hwnd, 999, 506)
+                rmc(999, 506)
                 break
             case "esc":
             case "buy":
@@ -1088,7 +1095,7 @@ async function main() {
                 await sleep(1000)
                 break
             case "buff":
-                mc(hwnd, 1456, 808)
+                rmc(1456, 808)
                 await sleep(300)
                 break
             case "finish": {
@@ -1102,11 +1109,11 @@ async function main() {
                 break
             }
             case "enter":
-                mc(hwnd, 1456, 808)
+                rmc(1456, 808)
                 break
             case "unknown":
                 if (i++ > 5) {
-                    mc(hwnd, 1456, 808)
+                    rmc(1456, 808)
                     i = 0
                 }
                 await sleep(300)
