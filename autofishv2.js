@@ -291,7 +291,7 @@ async function waitTP(name) {
     const result = await c.waitColor(130, 860, 0x8fd19e, 10, 60e3) // #8fd19e
     console.log(`${name}传送${result ? "成功" : "失败"}`)
     if (!result) return false
-    await sleep(1000)
+    await sleep(2000)
     if (currentPool === "冰湖") await c.kb("a", 200)
     setStatus("substate", `往前走${name}`)
     kd(c.hwnd, "w")
