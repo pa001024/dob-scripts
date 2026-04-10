@@ -1,7 +1,7 @@
 // ==UserScript==
 // @id 4PvTpU_n-H
 // @name autoshengming
-// @description 声名惠赠自动提交与刷新
+// @description 声名惠赠自动提交与刷新 1.3
 // @author pa
 // @version 1.0.0
 // @category 其他
@@ -9,15 +9,42 @@
 // ==/UserScript==
 
 // 说明: 进"惠赠"页面开启
-
+class Cap {
+    constructor() {
+        this.frameless = readConfig("无边框", "游戏启动中开启无标题栏", "boolean", false)
+        this.hwnd = getWindowByProcessName("EM-Win64-Shipping.exe")
+        if (!this.hwnd || !isElevated()) throw new Error("未找到窗口或非管理员权限")
+        this.yof = this.frameless ? 0 : 30
+        checkSize(this.hwnd, 1600, 900 + this.yof)
+        /** @type Mat */
+        this.frame = this.cap()
+    }
+    cap() {
+        this.frame = this.frameless ? captureWindowWGC(this.hwnd) : captureWindowWGC(this.hwnd).roi(0, 30, 1600, 900)
+        return this.frame
+    }
+    /** @param {number} x @param {number} y */
+    mc(x, y) {
+        return mc(this.hwnd, x, y + this.yof)
+    }
+    /**
+     * 按键操作（异步）
+     * @param {KeyEnum} key 按键名称
+     * @param {number} [duration] 按键持续时间
+     */
+    async kb(key, duration) {
+        await kb(this.hwnd, key, duration)
+    }
+}
+const c = new Cap()
 /** @typedef {[number, number]} Point */
 /** @typedef {{name: string; hash: string}} ItemHash */
 /** @typedef {{rois: Mat[]; hashes: string[]; slotPass: boolean[]; cardPass: boolean[]; colorGate: boolean[]; cardReady: boolean[]}} AnalyzeResult */
 
-const SINGLE_CAPTURE_MODE = true
+const SINGLE_CAPTURE_MODE = false
 const X_START = 202
 const X_OFFSET_CELL = 70
-const ROI_Y = 574
+const ROI_Y = 596
 const ROI_W = 50
 const ROI_H = 32
 const COL_COUNT = 4
@@ -32,19 +59,16 @@ const MATERIAL_ROIS = Array.from({ length: COL_COUNT }, (_, col) => X_START + Ma
 /** @type {Point[]} */
 const SUBMIT_POINTS = Array.from({ length: COL_COUNT }, (_, col) => [342 + Math.round(col * X_OFFSET_COL_FLOAT), 691])
 
-/** @type {Point} */
-const REFRESH_POINT = [1328, 756]
-/** @type {ROI} */
-const REPUTATION_ROI = [1285, 165, 73, 21]
-
 /** @type {ItemHash[]} */
 const ITEM_HASHES = [
     { hash: "9f6783e4f11c0e82", name: "秽兽甲壳" },
     { hash: "b8a712b64a35e89c", name: "锁链" },
     { hash: "b8a752364c33cc9c", name: "锁链" },
     { hash: "7603f66b9cdc6202", name: "军团铭牌" },
+    { hash: "6731e60b9cfc0632", name: "军团铭牌" },
     { hash: "78e36c837836629c", name: "秽兽凝脂" },
     { hash: "868c6c792634daf8", name: "朱红泪滴" },
+    { hash: "d23c63780674dab8", name: "朱红泪滴" },
     { hash: "2cb6e313d86616d8", name: "待雪鸟尾羽" },
     { hash: "69d66c92489ce2e6", name: "载具装甲" },
     { hash: "c6633c4c83bcd8a6", name: "流体合金" },
@@ -53,6 +77,7 @@ const ITEM_HASHES = [
     { hash: "19ec7127c49c6e32", name: "通讯手册" },
     { hash: "f32cc35c25d22cd2", name: "石料粉末" },
     { hash: "72f1b47c9c23069c", name: "破损的嗅盐" },
+    { hash: "639c363c98274e9c", name: "破损的嗅盐" },
     { hash: "9bb873e70c1cd224", name: "燃料试剂" },
     { hash: "ec0eb01b78fc86c2", name: "祝文卷轴" },
     { hash: "dc338e1ee31c609c", name: "信号线缆" },
@@ -80,11 +105,6 @@ const refreshMaxTimes = readConfig("最大刷新次数", "-1 表示不限", "num
 const timeoutSec = readConfig("超时秒", "<=0 表示不限", "number", 300)
 const checkReputationCap = readConfig("检测声名上限", "numocr 检测 x/y 是否满", "boolean", true)
 const debugStatus = readConfig("调试状态", "显示 ROI 与哈希调试信息", "boolean", true)
-const frameless = readConfig("无边框", "无边框窗口", "boolean", false)
-
-const hwnd = getWindowByProcessName("EM-Win64-Shipping.exe")
-if (!hwnd || !isElevated()) throw new Error("未找到窗口或非管理员权限")
-checkSize(hwnd)
 
 /** @param {ROI} roi @returns {ROI} */
 function withOffsetRoi(roi) {
@@ -102,14 +122,14 @@ function withOffsetPoint(point) {
  */
 function numocr(roi) {
     const NUM_HASHES = [
-        "001a00490049001c", // 0
-        "a4a4a41b5b5b5ba4", // 1
+        "6b906b42e54ac53e", // 0
+        "839393939393936c", // 1
         "1ab1e0693ae73ce0", // 2
         "b6183c69b64bc3c4", // 3
-        "616c7164cfd9d0c8", // 4
-        "9418c7c1954b6f96", // 5
+        "306cdbcccf399222", // 4
+        "c6c14fc1c43a4f1e", // 5
         "c63ee7493f1838c0", // 6
-        "3383339f93272d28", // 7
+        "e16dc13dc16c6968", // 7
         "b73ce1493e48e1c4", // 8
         "383a1ae168bac76c", // 9
     ]
@@ -141,9 +161,9 @@ function cardOffsetX(cardIdx) {
 
 /** @param {Mat} frame @param {number} cardIdx @returns {boolean} */
 function canSubmitByColor(frame, cardIdx) {
-    const x = 325 + cardOffsetX(cardIdx) + offsetX
-    const y = 454 + offsetY
-    return cc(frame, x, y, 0x1b1b1b, 10)
+    const x = 257 + cardOffsetX(cardIdx) + offsetX
+    const y = 253 + offsetY
+    return cc(frame, x, y, 0x373633, 10)
 }
 
 /** @param {Mat} frame @returns {AnalyzeResult} */
@@ -178,7 +198,7 @@ function renderMaterialStatus(analysis) {
 /** @param {Mat} frame @returns {boolean} */
 function isReputationCapped(frame) {
     if (!checkReputationCap) return false
-    const roi = frame.roi(...withOffsetRoi(REPUTATION_ROI))
+    const roi = frame.roi(...withOffsetRoi([1283, 181, 85, 21]))
     const currentText = numocr(roi)
     return currentText === "15001500"
 }
@@ -186,13 +206,13 @@ function isReputationCapped(frame) {
 /** @param {number} idx @returns {Promise<void>} */
 async function clickSubmit(idx) {
     const p = withOffsetPoint(SUBMIT_POINTS[idx])
-    mc(hwnd, p[0], p[1])
+    c.mc(p[0], p[1])
     await sleep(submitDelayMs)
 }
 
 async function clickRefresh() {
-    const p = withOffsetPoint(REFRESH_POINT)
-    mc(hwnd, p[0], p[1])
+    const p = withOffsetPoint([1324, 770])
+    c.mc(p[0], p[1])
     await sleep(refreshDelayMs)
 }
 
@@ -215,7 +235,7 @@ async function main() {
     }
 
     if (SINGLE_CAPTURE_MODE) {
-        const frame = captureWindowWGC(hwnd)
+        const frame = c.cap()
         const analysis = analyzeMaterials(frame)
         renderMaterialStatus(analysis)
         isReputationCapped(frame)
@@ -233,7 +253,7 @@ async function main() {
             break
         }
 
-        const frame = captureWindowWGC(hwnd)
+        const frame = c.cap()
         if (isReputationCapped(frame)) {
             setStatus("声名流程", `声名已达上限，提交 ${submitCount}，刷新 ${refreshCount}`)
             stopReason = "声名上限"

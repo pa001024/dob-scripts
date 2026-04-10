@@ -9,7 +9,7 @@
 // ==/UserScript==
 
 // 说明: 键位和视角设置全默认(!!!!) 视距1.3
-// 止流带专武赘生雷月卡/球球蜂 不推荐带防御魔灵 打慢了缺蓝直接寄 潜质攻击减CD复活
+// 止流带专武赘生雷月卡/球球蜂 不推荐带防御魔灵 打慢了缺蓝直接寄 潜质攻击威力昂扬老道
 // 难度根据情况选 6命选270/300 2命选240
 // 密码: 6
 
@@ -30,6 +30,7 @@ const config = {
     lock: readConfig("密码", "请查看说明以获取密码", "string"),
     frameless: readConfig("无边框", "无边框窗口", "boolean", false),
     debug: readConfig("debug", "-", "boolean", false),
+    single: readConfig("single", "单帧识别", "boolean", false),
     battleTime: readConfig("战斗超时", "超时暂离(秒)", "number", 120) * 1e3,
     /** @type {ROI} */ minimapLoc: [30, 35, 180, 180],
     /** @type {ROI} */ mainLoc: [290, 169, 1020, 514],
@@ -40,7 +41,7 @@ const yof = config.frameless ? 0 : 30
 checkSize(hwnd, 1600, 900 + yof)
 
 function cap13() {
-    return config.frameless ? captureWindowWGC(hwnd) : captureWindowWGC(hwnd).roi(0, 30, 1600, 900)
+    return config.frameless ? captureWindowWGC(hwnd) : captureWindowWGC(hwnd, 0, 30, 1600, 900)
 }
 /** @param {number} x @param {number} y */
 function rmc(x, y) {
@@ -268,28 +269,33 @@ async function prepareSkill(skill) {
     currentSkill = checkSkill(frame)
     /** @param {"long" | "short"} type 长E或短E */
     async function useSkillEAndCheck(type) {
-        // console.log(`useSkillEAndCheck(${type})`)
         await kb(hwnd, "e", type === "long" ? 800 : 10)
-        await sleep(type === "long" ? 1300 : 350)
+        await sleep(type === "long" ? 800 : 300)
         // 更新画面
         currentSkill = checkSkill(frame)
     }
+    const timer = new Timer()
+    const timeout = 5e3
+    function checkTimeout() {
+        return timer.elapsed() < timeout && gameState.state !== "finish"
+    }
     switch (skill) {
         case "q1":
-            if (currentSkill !== 1) await useSkillEAndCheck("long")
-            if (currentSkill !== 1) await useSkillEAndCheck("long")
+            while (currentSkill !== 1 && checkTimeout()) await useSkillEAndCheck("long")
             break
         case "q2":
-            if (currentSkill !== 2 && currentSkill !== 3) await useSkillEAndCheck("short")
-            if (currentSkill !== 2) await useSkillEAndCheck("long")
-            break
         case "Q2":
-            if (currentSkill !== 2 && currentSkill !== 3) await useSkillEAndCheck("short")
-            if (currentSkill !== 2) await useSkillEAndCheck("long")
+            if (currentSkill === 0) {
+                await useSkillEAndCheck("long")
+                await useSkillEAndCheck("short")
+            }
+            while (currentSkill !== 2 && checkTimeout()) {
+                if (currentSkill !== 2 && currentSkill !== 3) await useSkillEAndCheck("short")
+                if (currentSkill !== 2) await useSkillEAndCheck("long")
+            }
             break
         case "q3":
-            if (currentSkill !== 3) await useSkillEAndCheck("short")
-            if (currentSkill !== 3) await useSkillEAndCheck("short")
+            while (currentSkill !== 3 && checkTimeout()) await useSkillEAndCheck("short")
             break
     }
 }
@@ -377,7 +383,7 @@ async function doge(boss = false) {
 
 /** 检查状态 @param {Mat} frame */
 function checkState(frame) {
-    if (cc(frame, 47, 275, 0xffffb8, 10)) {
+    if (cc(frame, 44, 272, 0xffffc7, 10)) {
         if (cc(frame, 527, 64, 0x000000, 10)) {
             if (cc(frame, 541, 61, 0xff3e3e, 10)) {
                 return "battle_boss"
@@ -400,7 +406,7 @@ function checkState(frame) {
             }
         }
     } else {
-        if (cc(frame, 44, 276, 0xeb3a43, 10)) {
+        if (cc(frame, 44, 273, 0xff5058, 10)) {
             if (cc(frame, 87, 310, 0xfcfcfc, 10)) {
                 return "battle"
             } else {
@@ -483,6 +489,9 @@ function checkMap(frame) {
     /** @param {string} points  */
     function getMap(points) {
         switch (points) {
+            case "00101000010":
+            case "00101110010":
+                return "dash"
             case "01110000010":
             case "11111000010":
             case "10101000110":
@@ -500,7 +509,7 @@ function checkMap(frame) {
                 return "bossfang"
             default:
                 if (points.startsWith("1111000")) return "zuoguai"
-                return points.startsWith("1111") ? "maybe" : "unknown"
+                return "unknown"
         }
     }
     const state = getMap(points)
@@ -681,6 +690,15 @@ async function moveLoop(type = "door") {
         map = checkMap(frame)
     }
     switch (map) {
+        case "dash":
+            kd(hwnd, "w")
+            await sleep(50)
+            await kb(hwnd, "shift")
+            await sleep(600)
+            ku(hwnd, "w")
+            mc(hwnd)
+            await sleep(1000)
+            break
         case "zuoguai":
             await fastMove()
             await sleep(700)
@@ -766,7 +784,7 @@ async function moveLoop(type = "door") {
         } else {
             kd(hwnd, "w")
             await waitF(200)
-            if (gameState.distance >= 8 && shiftcd.elapsed() > 2e3) {
+            if (gameState.distance >= 7 && shiftcd.elapsed() > 2e3) {
                 await kb(hwnd, "shift")
                 shiftcd.reset()
             }
@@ -852,7 +870,7 @@ async function battleLoop(state) {
             await doge(isBoss)
             await sleep(100)
         }
-        if (frame.get_hsl(782, 822)[2] < 0.7 || timer.elapsed() > 35e3) {
+        if ((frame.get_hsl(782, 822)[2] < 0.7 && timer.elapsed() > 8e3) || timer.elapsed() > 35e3) {
             await useSkill("q2")
             await useSkill("z")
             if (isBoss && config.useQ1) {
@@ -896,7 +914,7 @@ async function resetLoop(skip = false) {
         await moveC(hwnd, 1115, 820 + yof, 300)
         await sleep(500)
         await moveC(hwnd, 563, 28 + yof, 500)
-        await moveC(hwnd, 1014, 380 + yof, 500)
+        await moveC(hwnd, 942, 536 + yof, 500)
         await sleep(200)
         rmc(1010, 379)
     }
@@ -928,28 +946,34 @@ async function selectShopOption() {
 
 /** @param {Mat} roi  */
 function numocr(roi) {
-    const chasharr = [
-        "f14af14ae14be01e", // 0
-        "b0b0f0f1515b5ba4", // 1
-        "c862624b631f9d1e", // 2
-        "e1e0624bf15be09c", // 3
-        "0fb463e01fc94ab4", // 4
-        "25c9c94ba5634b1e", // 5
-        "8d9ca44b9dd8e036", // 6
-        "c90f634b4b278de0", // 7
-        "f10e624af1d9e01e", // 8
-        "48d9f263c862379c", // 9
+    const ct = [
+        { k: "0", v: "f14af14ae14be01e" },
+        { k: "0", v: "634b634b634b630e" },
+        { k: "1", v: "b0b0f0f1515b5ba4" },
+        { k: "2", v: "c862624b631f9d1e" },
+        { k: "3", v: "e1e0624bf15be09c" },
+        { k: "4", v: "63b463e09dc94ab4" },
+        { k: "5", v: "25c9c94ba5634b1e" },
+        { k: "6", v: "8d9ca44b9dd8e036" },
+        { k: "7", v: "c90f634b4b278de0" },
+        { k: "8", v: "f10e624af1d9e01e" },
+        { k: "8", v: "720f724b621f621e" },
+        { k: "9", v: "4b630d634b62371e" },
+        { k: "米", v: "5040145041040010" },
     ]
+    const chasharr = ct.map(v => v.v)
     const filterd = colorFilter(roi, [0xffffff], 40)
     const bboxs = segmentChars(filterd, 1, 2)
     const chars = bboxs.map(v => filterd.roi(...v))
     const hashs = chars.map(v => perceptualHash(v))
     const ret = hashs
-        .map(v => matchHammingHash(v, chasharr, 20))
-        .filter(v => v >= 0)
+        .map(v => {
+            const r = matchHammingHash(v, chasharr, 30)
+            return r >= 0 && ct[r].k !== "米" ? ct[r].k : ""
+        })
         .join("")
-    // setStatus("num", filterd, ret)
-    // setStatus("chars", chars, hashs.join("\n"))
+    if (config.single && config.debug) setStatus("num", filterd, ret)
+    if (config.single && config.debug) setStatus("chars", chars, hashs.join("\n"))
     return ret
 }
 
@@ -984,11 +1008,32 @@ function checkF() {
     return matched
 }
 
+/** @param {*} door */
+function ocrDistance(door, md = 0) {
+    const numroi = frame.roi(door.match.bbox[0] - 4, door.match.bbox[1] + door.match.bbox[3] + 5, 32, 15)
+    const d = +numocr(numroi)
+    gameState.distance = Number.isFinite(d) ? d : md
+    setStatus("route", `寻路${autoAimX ? "X" : ""}${autoAimY ? "Y" : ""}: ${~~door.dx}, ${~~door.dy}, ${gameState.distance}m`)
+}
+
 async function main() {
     if (config.lock !== "6") {
         console.error("请查看文件开头的说明并填写密码")
         return
     }
+    if (config.single) {
+        gameState.state = checkState(frame)
+        if (gameState.state === "door") {
+            const door = findDoor(frame)
+            if (door) ocrDistance(door)
+        }
+        if (gameState.state === "event") {
+            const door = findYellow(frame)
+            if (door) ocrDistance(door)
+        }
+        return
+    }
+
     const xtimer = setInterval(async () => {
         kb(hwnd, "x")
     }, 2e3)
@@ -1030,10 +1075,7 @@ async function main() {
                         md = gameState.distance = mDoor.distance
                     }
                 }
-                const numroi = frame.roi(door.match.bbox[0] - 4, door.match.bbox[1] + door.match.bbox[3] + 7, 24, 15)
-                const d = +numocr(numroi)
-                gameState.distance = Number.isFinite(d) ? d : md
-                setStatus("route", `寻路${autoAimX ? "X" : ""}${autoAimY ? "Y" : ""}: ${~~door.dx}, ${~~door.dy}, ${gameState.distance}m`)
+                ocrDistance(door, md)
                 const first = projectOffsetToMm(door.dx, door.dy + autoAimoffsetY, { out: door.out, rawDy: door.dy })
                 let fastX = clamp(first.mmx, -320, 320)
                 let fastY = clamp(first.mmy, -320, 320)
@@ -1104,7 +1146,7 @@ async function main() {
                     timer.reset()
                     console.info(`完成 ${++finished}次 用时 ${~~(secs / 60)}分${~~(secs % 60)}秒`)
                 }
-                mc(hwnd)
+                rmc(1456, 808)
                 await sleep(1500)
                 break
             }
