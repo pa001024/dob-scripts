@@ -692,6 +692,13 @@ declare function captureWindow(hwnd: number, x?: number, y?: number, w?: number,
 declare function captureWindowWGC(hwnd: number, x?: number, y?: number, w?: number, h?: number): Mat
 
 /**
+ * 获取窗口客户区位置与尺寸。
+ * @param hwnd 窗口句柄
+ * @returns [x, y, width, height]
+ */
+declare function winGetClientPos(hwnd: number): ROI | undefined
+
+/**
  * 从文件加载模板Mat对象(有缓存)
  * @param path 模板路径
  * @returns Mat对象
@@ -760,6 +767,22 @@ declare function readText(path: string, url?: string): string | undefined
  * @throws 下载失败时抛出错误
  */
 declare function downloadFile(url: string, filename: string, force?: boolean): Promise<void>
+
+/**
+ * 删除文件。
+ * @param path 文件路径（相对路径会按脚本目录解析）
+ * @returns 是否删除成功；文件不存在时返回 false
+ * @throws 删除过程中出现系统错误时抛出错误
+ */
+declare function deleteFile(path: string): boolean
+
+/**
+ * 检查文件是否存在。
+ * @param path 文件路径（相对路径会按脚本目录解析）
+ * @returns 文件是否存在
+ * @throws path 为空时抛出错误
+ */
+declare function existsFile(path: string): boolean
 
 /**
  * 初始化 OCR 模块（自动下载缺失资源到本地）。

@@ -3,18 +3,17 @@
 // @name cap
 // @description 批量截图工具
 // @author pa
-// @version 1.1.0
+// @version 1.3.0
 // @category 开发工具
-// @date 2026/4/7 22:25:13
+// @date 2026/04/15 13:48
 // ==/UserScript==
-
 const hwnd = getCGWindow() || getWindowByProcessName("EM-Win64-Shipping.exe")
 if (!hwnd) throw new Error("未找到窗口")
 checkSize(hwnd, 1600, 930)
 
 async function main() {
     let i = readConfig("i", "文件计数", "number", 1)
-    const t = readConfig("t", "截图间隔(ms) 设为0单次截图", "number", 1000)
+    const t = readConfig("t", "截图间隔(ms) 设为0单次截图", "number", 0)
     const timer = new Timer()
     while (true) {
         const img = captureWindow(hwnd, 0, 30, 1600, 900)

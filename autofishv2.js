@@ -411,6 +411,7 @@ async function checkFinish() {
             console.log(`咬钩超时`)
             c.kb("space") // 最后一条鱼超时
             await sleep(500)
+            fishTimeout.reset()
         }
         if (!currentAllowedTimes.includes(now.index)) {
             return "changeTime"

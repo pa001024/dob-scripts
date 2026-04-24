@@ -5,7 +5,7 @@
 // @author pa
 // @version 1.2.4
 // @category 其他
-// @date 2026/4/7 21:18:27
+// @date 2026/04/23 17:49
 // ==/UserScript==
 
 // 说明: 键位和视角设置全默认(!!!!) 视距1.3
@@ -383,7 +383,7 @@ async function doge(boss = false) {
 
 /** 检查状态 @param {Mat} frame */
 function checkState(frame) {
-    if (cc(frame, 44, 272, 0xffffc7, 10)) {
+    if (cc(frame, 46, 275, 0xffffc1, 10)) {
         if (cc(frame, 527, 64, 0x000000, 10)) {
             if (cc(frame, 541, 61, 0xff3e3e, 10)) {
                 return "battle_boss"
@@ -391,16 +391,8 @@ function checkState(frame) {
                 return "battle_boss_inv"
             }
         } else {
-            if (cc(frame, 67, 239, 0xfefefe, 10)) {
-                if (cc(frame, 45, 251, 0xffffff, 10)) {
-                    return "event"
-                } else {
-                    if (cc(frame, 121, 277, 0xffffff, 10)) {
-                        return "event"
-                    } else {
-                        return "door"
-                    }
-                }
+            if (cc(frame, 45, 251, 0xffffff, 10)) {
+                return "event"
             } else {
                 return "door"
             }
@@ -723,7 +715,10 @@ async function moveLoop(type = "door") {
             break
         case "paotai":
             if (!cc(frame, 219, 321, 0xffffb4, 10)) {
-                await kb(hwnd, "a", 1500)
+                kd(hwnd, "s")
+                await kb(hwnd, "a", 300)
+                ku(hwnd, "s")
+                await kb(hwnd, "a", 800)
                 if (await checkFinish()) {
                     setStatus("err")
                     return
@@ -1022,6 +1017,7 @@ async function main() {
         return
     }
     if (config.single) {
+        console.log("single")
         gameState.state = checkState(frame)
         if (gameState.state === "door") {
             const door = findDoor(frame)

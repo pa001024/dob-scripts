@@ -5,14 +5,15 @@
 // @author pa
 // @version 1.0.0
 // @category 开发工具
-// @date 2026/4/9 20:37:19
+// @date 2026/04/22 14:52
 // ==/UserScript==
 
 const file = readConfig("file", "", "string", "")
+const game = "HTGame.exe" || "EM-Win64-Shipping.exe"
 class Cap {
     constructor() {
         this.frameless = readConfig("无边框", "游戏启动中开启无标题栏", "boolean", false)
-        this.hwnd = getWindowByProcessName("EM-Win64-Shipping.exe")
+        this.hwnd = getWindowByProcessName(game)
         if (!this.hwnd || !isElevated()) throw new Error("未找到窗口或非管理员权限")
         this.yof = this.frameless ? 0 : 30
         checkSize(this.hwnd, 1600, 900 + this.yof)
@@ -66,7 +67,10 @@ async function main() {
     setStatus("phash", phash)
     const chars = segmentChars(roi).map(v => roi.roi(...v))
     setStatus("chars", chars, chars.map(v => perceptualHash(v)).join("\n"))
-    // setStatus("ocr", ocrText(roi))
+    console.time("ocr")
+    const text = ocrText(roi)
+    console.timeEnd("ocr")
+    setStatus("ocr", text)
 }
 
 main()

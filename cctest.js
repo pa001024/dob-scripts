@@ -5,7 +5,7 @@
 // @author pa
 // @version 1.0.0
 // @category 开发工具
-// @date 2026/4/9 20:13:03
+// @date 2026/4/15 14:34:15
 // ==/UserScript==
 
 class Cap {
@@ -128,7 +128,7 @@ async function main() {
     let i = 0
     const timer = new Timer()
     while (true) {
-        const frame = c.cap()
+        const frame = imread("imgs/cap196.png") || c.cap()
         const state = checkState(frame)
         setStatus("result", state)
         // setStatus("img", frame)
