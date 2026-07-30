@@ -5,7 +5,7 @@
 // @author pa
 // @version 1.0.1
 // @category 其他
-// @date 2026/04/23 14:40
+// @date 2026/04/25 15:50
 // ==/UserScript==
 
 // 除等级上限和波次倒计时外需重启游戏
@@ -75,6 +75,12 @@ const patches = [
         name: "搜打撤秒鉴定",
         enable: readConfig("搜打撤秒鉴定", "所有物品瞬间鉴定", "bool", false),
         files: ["Script/Datas/ExtractionTreasureRarity.lua"],
+    },
+    {
+        id: "b50c762bcc981d5f07e604e871485310d54b24d4",
+        name: "快速抓魔灵",
+        enable: readConfig("快速抓魔灵", "跳过小游戏和饲料选择", "bool", false),
+        files: ["Script/BluePrints/UI/UI_PC/Pet_Capture/WBP_Pet_Capture_C.lua"],
     },
 ]
 

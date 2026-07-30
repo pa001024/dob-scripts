@@ -5,7 +5,7 @@
 // @author pa
 // @version 1.2.4
 // @category 其他
-// @date 2026/04/23 17:49
+// @date 2026/06/11 09:33
 // ==/UserScript==
 
 // 说明: 键位和视角设置全默认(!!!!) 视距1.3
@@ -728,6 +728,11 @@ async function moveLoop(type = "door") {
                 if (await checkFinish()) {
                     setStatus("err")
                 }
+                await kb(hwnd, "space")
+                await sleep(200)
+                await kb(hwnd, "space")
+                await sleep(200)
+                await kb(hwnd, "d", 700)
                 return
             }
             break
@@ -1162,6 +1167,7 @@ async function main() {
         }
         // 超时
         if (timer.elapsed() > 10 * 60e3) {
+            await moveTo(0, 0)
             console.error("循环超时")
             await exitAction()
             timer.reset()

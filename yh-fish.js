@@ -5,7 +5,7 @@
 // @author pa
 // @version 1.0.0
 // @category 异环
-// @date 2026/04/24 20:13
+// @date 2026/05/11 20:47
 // ==/UserScript==
 
 const hwnd = getWindowByProcessName("HTGame.exe")
@@ -95,8 +95,8 @@ async function main() {
                 await fishLoop()
                 break
             case "unknown":
-                await moveTo(hwnd, 1294, 769)
-                mc(hwnd, 1294, 769)
+                await kb(hwnd, "esc")
+                await sleep(800)
                 if (timer.elapsed() > 30e3) {
                     console.error("超时")
                     return

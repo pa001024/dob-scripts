@@ -1,11 +1,22 @@
+// ==UserScript==
+// @id 2pyOSUe1oQ
+// @name yehang
+// @description 夜航黎瑟基本通用
+// @author pa
+// @version 1.0.0
+// @category 其他
+// @date 2026/07/29 04:41
+// ==/UserScript==
+
 const config = {
-    ftime: readConfig("帧间隔", "取帧间隔(毫秒)", "number", 100),
+    ftime: readConfig("帧间隔", "取帧间隔(毫秒)", "number", 200),
     frameless: readConfig("无边框", "无边框窗口", "boolean", false),
     debug: readConfig("debug", "-", "boolean", false),
     single: readConfig("single", "单帧识别", "boolean", false),
     book: readConfig("倍率书", "选择用的书类型", ["不用", "绿书", "蓝书", "紫书", "金书"], "不用"),
     /** @type {ROI} */ minimapLoc: [30, 35, 180, 180],
     /** @type {ROI} */ mainLoc: [290, 169, 1020, 514],
+    actionstart: readConfig("开始时的动作", "标准动作序列 比如+2(L0.3#0.2)", "string", "+2(L0.3#0.2)Q"),
 }
 
 class Cap {
@@ -236,32 +247,28 @@ class Cap {
      */
     async #runDslNodes(nodes, token) {
         for (const node of nodes) {
+            // console.log(node)
             this.#assertPlayActive(token)
             switch (node.type) {
                 case "wait":
-                    await this.#sleepInterruptible(node.ms, token)
+                    await sleep(node.ms)
                     break
                 case "key":
                     if (node.duration == null || node.duration <= 0) {
                         await this.kb(node.key)
                     } else {
-                        kd(this.hwnd, node.key)
-                        try {
-                            await this.#sleepInterruptible(node.duration, token)
-                        } finally {
-                            ku(this.hwnd, node.key)
-                        }
+                        await this.kb(node.key, node.duration)
                     }
                     break
                 case "mouse":
                     if (node.button === "middle") {
                         this.mt(node.x, node.y)
-                        if (node.waitMs > 0) await this.#sleepInterruptible(node.waitMs, token)
+                        if (node.waitMs > 0) await sleep(node.waitMs)
                         break
                     }
                     this.md(node.x, node.y, node.button === "right" ? "right" : undefined)
                     try {
-                        if (node.waitMs > 0) await this.#sleepInterruptible(node.waitMs, token)
+                        if (node.waitMs > 0) await sleep(node.waitMs)
                     } finally {
                         this.mu(node.x, node.y, node.button === "right" ? "right" : undefined)
                     }
@@ -417,7 +424,7 @@ class DslParser {
         if (ch === "#") return this.parseWait()
         if (ch === "+") return this.parseLoop()
         if (ch === "(") return this.parseGroup()
-        if (ch === "M" || ch === "R" || ch === "T") return this.parseMouse()
+        if (ch === "L" || ch === "R" || ch === "M") return this.parseMouse()
         return this.parseKey()
     }
     /** @returns {DslWaitNode} */
@@ -448,7 +455,7 @@ class DslParser {
     /** @returns {DslMouseNode} */
     parseMouse() {
         const buttonChar = this.peek()
-        if (buttonChar !== "M" && buttonChar !== "R" && buttonChar !== "T") this.error("invalid mouse token")
+        if (buttonChar !== "L" && buttonChar !== "R" && buttonChar !== "M") this.error("invalid mouse token")
         this.i++
         this.skipWs()
         /** @type {number | undefined} */
@@ -473,7 +480,7 @@ class DslParser {
         const waitMs = this.readNumber()
         return {
             type: "mouse",
-            button: buttonChar === "R" ? "right" : buttonChar === "T" ? "middle" : "left",
+            button: buttonChar === "R" ? "right" : buttonChar === "M" ? "middle" : "left",
             x,
             y,
             waitMs: waitMs == null ? 0 : Math.round(waitMs * 1000),
@@ -509,11 +516,14 @@ class DslParser {
             this.error(`unsupported quoted key: ${raw}`)
         }
 
+        if (ch === "_") {
+            this.i++
+            return "space"
+        }
         if (ch === ">") {
             this.i++
             return "lshift"
         }
-
         if (ch === "C") {
             this.i++
             return "lctrl"
@@ -707,48 +717,14 @@ class MainState {
     route = new RouteState()
     /** @param {Mat} frame  */
     checkState(frame) {
-        if (cc(frame, 44, 273, 0xffffc8, 10)) {
-            if (cc(frame, 45, 24, 0xffffff, 10)) {
-                return "yp"
-            }
+        if (cc(frame, 1052, 794, 0xe1b454, 10)) {
+            return "r"
         } else {
-            if (cc(frame, 24, 23, 0xffffce, 10)) {
-                if (cc(frame, 1407, 871, 0x000000, 10)) {
-                    return "esc_menu"
-                } else {
-                    return "enter"
-                }
+            if (cc(frame, 47, 26, 0xffffff, 10)) {
+                return "battle"
             } else {
-                if (cc(frame, 364, 289, 0x000000, 10)) {
-                    if (cc(frame, 473, 287, 0x000000, 10)) {
-                        return "wave"
-                    } else {
-                        return "book"
-                    }
-                } else {
-                    if (cc(frame, 473, 287, 0x000000, 10)) {
-                        return "book"
-                    } else {
-                        if (cc(frame, 1115, 376, 0xce9997, 10)) {
-                            return "confirm"
-                        } else {
-                            if (cc(frame, 1161, 816, 0xfefefe, 10)) {
-                                return "esc"
-                            } else {
-                                if (cc(frame, 1043, 795, 0xe1b454, 10)) {
-                                    return "r"
-                                } else {
-                                    if (cc(frame, 49, 278, 0xf1454e, 10)) {
-                                        return "rp"
-                                    } else {
-                                        if (cc(frame, 45, 24, 0xffffff, 10)) {
-                                            return "rp"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+                if (cc(frame, 622, 607, 0x000000, 10)) {
+                    return "space"
                 }
             }
         }
@@ -771,6 +747,7 @@ class MainState {
             }
         }
     }
+    moved = false
     async next() {
         const lastState = this.state
         await this.waitUntil()
@@ -779,42 +756,24 @@ class MainState {
                 c.mc(757, 733)
                 break
             case "r":
+                this.moved = false
                 await c.kb("r")
                 break
-            case "book":
+            case "space":
                 await this.selectBoost(config.book)
                 break
-            case "enter":
-                c.mc(1357, 810)
-                break
-            case "yp":
-                await this.route.start()
-                break
-            case "confirm":
-                c.mc(949, 508)
-                await sleep(1000)
-                break
-            case "esc":
-                c.mc(1476, 819)
+            case "battle":
+                if (!this.moved) {
+                    this.moved = true
+                    await sleep(2000)
+                    await c.play(config.actionstart)
+                }
+                if (!cc(c.frame, 1437, 799, 0xffffff, 10)) {
+                    await c.kb("q")
+                }
                 break
         }
         await sleep(config.ftime)
-    }
-    async battleEnter() {
-        md()
-        await sleep(600)
-        mu()
-        await sleep(400)
-        md()
-        await sleep(600)
-        mu()
-        await sleep(600)
-    }
-    async battleAction() {
-        await kb(c.hwnd, "r")
-        await sleep(500)
-        await kb(c.hwnd, "space")
-        await sleep(500)
     }
     /** 选择倍率书 @param {number|string} [book=0]  */
     async selectBoost(book = 0) {
@@ -833,7 +792,8 @@ async function main() {
     const mainState = new MainState()
     if (config.single) {
         // await mainState.next()
-        await mainState.route.moveLoop()
+        // await mainState.route.moveLoop()
+        await c.play("L0.4")
         return
     }
     while (true) {
