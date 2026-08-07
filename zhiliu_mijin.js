@@ -1,11 +1,11 @@
 // ==UserScript==
 // @id JYVs5DxWME
 // @name zhiliu_mijin
-// @description 止流迷津 1.3
+// @description 止流迷津 1.5
 // @author pa
-// @version 1.2.4
+// @version 1.2.5
 // @category 其他
-// @date 2026/06/11 09:33
+// @date 2026/08/08 02:44
 // ==/UserScript==
 
 // 说明: 键位和视角设置全默认(!!!!) 视距1.3
@@ -383,7 +383,7 @@ async function doge(boss = false) {
 
 /** 检查状态 @param {Mat} frame */
 function checkState(frame) {
-    if (cc(frame, 46, 275, 0xffffc1, 10)) {
+    if (cc(frame, 49, 278, 0xffffaf, 33) || cc(frame, 49, 278, 0xd6eeb8, 33)) {
         if (cc(frame, 527, 64, 0x000000, 10)) {
             if (cc(frame, 541, 61, 0xff3e3e, 10)) {
                 return "battle_boss"
@@ -398,7 +398,7 @@ function checkState(frame) {
             }
         }
     } else {
-        if (cc(frame, 44, 273, 0xff5058, 10)) {
+        if (cc(frame, 44, 273, 0xff5058, 33) || cc(frame, 45, 274, 0xff4d55, 33) || cc(frame, 49, 278, 0xd56874, 33)) {
             if (cc(frame, 87, 310, 0xfcfcfc, 10)) {
                 return "battle"
             } else {
@@ -427,8 +427,8 @@ function checkState(frame) {
                         if (cc(frame, 640, 850, 0x8fd19e, 10)) {
                             return "esc"
                         } else {
-                            if (cc(frame, 1274, 46, 0x0b0b18, 10)) {
-                                if (cc(frame, 1263, 46, 0xffffff, 10)) {
+                            if (cc(frame, 1241, 43, 0x090a17, 10)) {
+                                if (cc(frame, 1230, 45, 0xffffff, 10)) {
                                     return "shop"
                                 }
                             } else {
@@ -491,6 +491,7 @@ function checkMap(frame) {
             case "11101000000":
             case "11100000110":
             case "11111000000":
+            case "11111000011":
                 return "zuoguai"
             case "00000111001":
                 return "paotai_reset" // 炮台背面
@@ -908,19 +909,19 @@ async function exitAction(type = 1) {
 /** 重置 */
 async function resetLoop(skip = false) {
     setStatus("fn", "resetLoop")
-    kb(hwnd, "esc", 33)
+    await kb(hwnd, "esc", 33)
     await sleep(800)
     if (!skip) {
-        await moveC(hwnd, 1115, 820 + yof, 300)
+        await moveC(hwnd, 1115, 820 + yof, 300) // 设置
         await sleep(500)
-        await moveC(hwnd, 563, 28 + yof, 500)
-        await moveC(hwnd, 942, 536 + yof, 500)
+        await moveC(hwnd, 563, 28 + yof, 500) // 其他
+        await moveC(hwnd, 1356, 632 + yof, 500) // 重置
         await sleep(200)
-        rmc(1010, 379)
+        mc(hwnd, 1010, 379)
     }
-    await moveC(hwnd, 999, 506 + yof, 100)
+    await moveC(hwnd, 999, 506 + yof, 100) // 确定
     await sleep(500)
-    mt(hwnd)
+    mt()
     await sleep(500)
 }
 
@@ -1011,7 +1012,8 @@ function checkF() {
 /** @param {*} door */
 function ocrDistance(door, md = 0) {
     const numroi = frame.roi(door.match.bbox[0] - 4, door.match.bbox[1] + door.match.bbox[3] + 5, 32, 15)
-    const d = +numocr(numroi)
+    let d = +numocr(numroi)
+    if (d >= 100) d = ~~(d / 10)
     gameState.distance = Number.isFinite(d) ? d : md
     setStatus("route", `寻路${autoAimX ? "X" : ""}${autoAimY ? "Y" : ""}: ${~~door.dx}, ${~~door.dy}, ${gameState.distance}m`)
 }
