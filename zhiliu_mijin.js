@@ -5,7 +5,7 @@
 // @author pa
 // @version 1.2.5
 // @category 其他
-// @date 2026/08/08 02:44
+// @date 2026/08/09 07:29
 // ==/UserScript==
 
 // 说明: 键位和视角设置全默认(!!!!) 视距1.3
@@ -457,6 +457,7 @@ function checkState(frame) {
     if (cc(frame, 47, 39, 0xffffff, 10) && cc(frame, 48, 209, 0xfefefe, 10)) {
         return "home"
     }
+    if (cc(frame, 1183, 362, 0xdaa199, 10)) return "dialog"
     if (matchHammingHash(perceptualHash(frame.roi(718, 72, 38, 37)), ["778eb05ec974b600"], 10) >= 0) return "finish"
     return "unknown"
 }
@@ -1153,6 +1154,9 @@ async function main() {
                 await sleep(1500)
                 break
             }
+            case "dialog":
+                rmc(974, 529)
+                break
             case "enter":
                 rmc(1456, 808)
                 break

@@ -1,14 +1,14 @@
 // ==UserScript==
 // @id 2pyOSUe1oQ
 // @name yehang
-// @description 夜航黎瑟基本通用
+// @description 夜航黎瑟/艾达基本通用
 // @author pa
-// @version 1.0.0
+// @version 1.1.0
 // @category 其他
-// @date 2026/08/05 23:14
+// @date 2026/08/09 10:24
 // ==/UserScript==
 
-// 艾达挂70新本/80jjb的配置: +2(L0.3#0.3) q +16(e0.1#0.5)
+// 艾达可挂70新本/80jjb
 
 import { Cap } from "cap"
 const c = new Cap(getWindowByProcessName("EM-Win64-Shipping.exe"))
@@ -19,27 +19,129 @@ const config = {
     book: readConfig("倍率书", "选择用的书类型", ["不用", "绿书", "蓝书", "紫书", "金书"], "不用"),
     /** @type {ROI} */ minimapLoc: [30, 35, 180, 180],
     /** @type {ROI} */ mainLoc: [290, 169, 1020, 514],
-    actionstart: readConfig("开始时的动作", "标准动作序列 比如+2(L0.3#0.2)", "string", "+2(L0.3#0.2)"),
+    actionstart: readConfig("开始时的动作", "标准动作序列 比如+2(L0.3#0.4)", "string", "+2(L0.3#0.4)"),
+    actionbattle: readConfig("途中的动作", "标准动作序列 比如+0(e0.2 R0.1 d0.5 M #1)", "string", "+0(e0.2 R0.1 d0.5 M #1)"),
+    banmap: readConfig("屏蔽地图", "地图代码 逗号分隔", "string", "39e4644ccda6b998,9ac35114ae38add6,9e8d79a64c89a670"),
 }
 
 class RouteState {
-    yellowP = getTemplateB64(
-        "iVBORw0KGgoAAAANSUhEUgAAABoAAAAaCAMAAACelLz8AAABblBMVEUAAAC9dyN/h1fOnUr//55+hlfPm0p/h1cQHBl+hlZETTbOm0nPm0nPnErQnkv//57//57//55+hlZ+hVbRn0vRnUr//57//55/hleBiFd9hFV+hVbRn0vPmkn//57//57//57//57//57//57//57//56AiVgMHBz//57//57//57//57//57//558hFb//56BhlW9dyO9diP//8b//73//6H//7///7v//8P//8H//7b//6nkzY3Qn0r//8rmzZP/85D/1Yn/y4Tix37//8///7P/6LL//6///6X7z571xIbixoLjxnzku27//Lz98rn/56r++Kn51Kf/3qb/25z//Zr//5f/+pf/4pX/15X/5ZL/6Y3/4Izjx4vm0IrkzYj5yYTjyIT//LH517D/8K77267/8an/+J3/85z/8Jzy0Jj/8Jf4zpb2w5D/x47/143syYr/x4f/1oXmxILxw4Dhvn3ly3vkzXThq3Lip16Wiv2WAAAAMXRSTlMA/hr8sh/1MAUuCfjy6965tYorJ/jl2ZRHQTs0++bez8nCr6mkj2IQzaWeg3t5cGsWsWovNQAAAYpJREFUKM9t0mVzwkAQBuBcAhR3KJS6e3t3EZIQinsdd+ru+u8LDNOBwH67eeZ29u5dor+0pJoYXbs7i+7Rplxy2E2eUWZb1EOkX1cOi3VeBVtp5Ngg5TKm0ME9v9cHjFukTMwq9MVhL27bJjl4RwX3bwUO+/k0MFps6gGpH5cLIs3zdB0Z5t3anmgUKpSJnp2WGQ5HMBtG1MzySk/a3XJM/Kp0I3ojGNMNKE1vr3Qn0MFMthTI54tFJh4VaI5rIGp6WUsoTXYYjl6cJp8DgWqFSTAJMS6EkTTrIUjzJGxx9MHhefIpFHqrBAoJUQhDu0JDqF2z7cdG/Dx9ePKY+mgGq/e5b6hbsHWScJn0cA9jWji+e0k1g8HgPqIU1u6Eas+CHmREhrnOPqReQ6FfRJk0/1+7ZgDvR7GjWOzyJPmDqLmxvkDGHSDNY5ZlDz6RNGcdjHEK+Fgvi32IWtXIIrYYQScUJDkn5IGRlilQq0HJ6RqxGuMGgCine1i6NjnT6zbc09wvshXtP/0B1T1FDU6xETsAAAAASUVORK5CYII="
-    )
-    /** @param {Mat} frame */
-    checkState(frame) {
-        if (cc(frame, 96, 116, 0x080908, 10)) {
-            return "zuoguai"
-        } else {
-            if (cc(frame, 133, 194, 0x080908, 10)) {
-                return "zhizou"
-            } else {
-                if (cc(frame, 106, 134, 0x080908, 10)) {
-                    return "youguai"
+    /** 找颜色 @param {Mat} img 窗口截图 */
+    findYP(img, threshold = 20) {
+        const xOffset = config.mainLoc[0]
+        const yOffset = config.mainLoc[1]
+        const roi = img.roi(...config.mainLoc)
+        const filtered = colorFilter(roi, [0xffd984, 0xc28334, 0xf0e084], threshold)
+        const closed = morphologyEx(filtered, "close", 4)
+        const contours = findContours(closed, 100).filter(c => c.area < 420 && c.bbox[2] < 28 && c.bbox[3] < 28)
+        for (const t of contours) {
+            const door = roi.roi(...t.bbox)
+            let match = -1
+            const doorf = colorFilter(door, [0xffffc5], 20)
+            const chars = segmentChars(doorf).map(v => doorf.roi(...v))
+            if (chars.some(v => matchHammingHash(perceptualHash(v), ["4bccf9360638d998"]) >= 0)) {
+                match = 0
+            }
+            if (match !== -1) {
+                const m = {
+                    center: [t.center[0] + xOffset, t.center[1] + yOffset],
+                    bbox: [t.bbox[0] + xOffset, t.bbox[1] + yOffset, t.bbox[2], t.bbox[3]],
+                    door,
+                }
+                const windowCenter = [xOffset + config.mainLoc[2] / 2, yOffset + config.mainLoc[3] / 2]
+                const dx = m.center[0] - windowCenter[0]
+                const dy = m.center[1] - windowCenter[1]
+                const dyi = (dy * 496) / 239 // 椭圆转圆形
+                const deg = Math.atan2(dy, dx) * (180 / Math.PI)
+                const distance = Math.hypot(dx, dyi)
+                if (config.debug) drawBorder(c.hwnd, m.bbox[0], m.bbox[1] + 30, m.bbox[2], m.bbox[3])
+                // console.log(`dx: ${dx.toFixed(2)}, dy: ${dy.toFixed(2)}, 角度: ${deg.toFixed(2)}, 距离: ${distance.toFixed(2)}m`)
+                return {
+                    match: m,
+                    dx,
+                    dy,
+                    angle: (deg + 90 + 360) % 360,
+                    distance,
+                    out: distance > 420,
                 }
             }
         }
-        return "unknown"
+    }
+
+    /** 转视角 @param {number} angle 角度 */
+    async turn(angle) {
+        /** @type {{[key: string]: KeyEnum[]}} */
+        const turnKeyMap = {
+            "-180": ["s"],
+            "-135": ["s", "a"],
+            "-90": ["a"],
+            "-45": ["w", "a"],
+            45: ["w", "d"],
+            90: ["d"],
+            135: ["s", "d"],
+            180: ["s"],
+        }
+        /** @param {KeyEnum[]} keys @param {number} duration */
+        async function tapTurnKeys(keys, duration = 70) {
+            for (const key of keys) c.kd(key)
+            await sleep(duration)
+            for (let i = keys.length - 1; i >= 0; i--) c.ku(keys[i])
+        }
+        const key = turnKeyMap[`${angle}`]
+        if (!key) return
+        await tapTurnKeys(key)
+        await sleep(16)
+        mt(c.hwnd)
+        await sleep(300)
+        mt(c.hwnd)
+        await sleep(300)
+    }
+
+    autoAimCalib = {
+        hFovDeg: 90,
+        xMm: 100,
+        yMm: 100,
+        xDeltaPx: Math.abs(-218 - 14.5),
+        yDeltaPx: Math.abs(-143.7 - 42),
+    }
+
+    autoAimModel = (() => {
+        const w = config.mainLoc[2]
+        const h = config.mainLoc[3]
+        const hFovRad = (this.autoAimCalib.hFovDeg * Math.PI) / 180
+        const vFovRad = 2 * Math.atan(Math.tan(hFovRad / 2) * (h / w))
+        const fx = w / 2 / Math.tan(hFovRad / 2)
+        const fy = h / 2 / Math.tan(vFovRad / 2)
+        const xDegByCalib = (Math.atan(this.autoAimCalib.xDeltaPx / fx) * 180) / Math.PI
+        const yDegByCalib = (Math.atan(this.autoAimCalib.yDeltaPx / fy) * 180) / Math.PI
+        return {
+            fx,
+            fy,
+            mmPerDegX: this.autoAimCalib.xMm / xDegByCalib,
+            mmPerDegY: this.autoAimCalib.yMm / yDegByCalib,
+        }
+    })()
+
+    /**
+     * 屏幕投影偏移 -> 摄像机角度 -> mm参数
+     * @param {number} dx
+     * @param {number} dy
+     * @param {{out?: boolean, rawDy?: number}} [opts]
+     */
+    projectOffsetToMm(dx, dy, opts = {}) {
+        let yawDeg = (Math.atan(dx / this.autoAimModel.fx) * 180) / Math.PI
+        const pitchDeg = (Math.atan(dy / this.autoAimModel.fy) * 180) / Math.PI
+        if (opts.out && opts.rawDy) {
+            // 边缘点会被压在椭圆上，使用 dx + 椭圆修正后的 dy 计算平面方向角。
+            const rawDy = Number.isFinite(opts.rawDy) ? opts.rawDy : dy
+            const dyi = (rawDy * 496) / 239
+            yawDeg = (Math.atan2(dx, -dyi) * 180) / Math.PI
+        }
+        return {
+            yawDeg,
+            pitchDeg,
+            mmx: Math.round(yawDeg * this.autoAimModel.mmPerDegX),
+            mmy: Math.round(pitchDeg * this.autoAimModel.mmPerDegY),
+        }
     }
 
     /** @param {Mat} roi  */
@@ -74,117 +176,40 @@ class RouteState {
         if (config.single && config.debug) setStatus("chars", chars, hashs.join("\n"))
         return ret
     }
-    /**
-     * 找颜色
-     * @param {Mat} img 窗口截图
-     * @param {number[]} colors 颜色数组
-     */
-    async findColors(img, colors = [0xffd984, 0xc28334, 0xf0e084], threshold = 10) {
-        /** @param {number} deg */
-        function degTo360(deg) {
-            return (deg + 360) % 360
-        }
-        // x: 290~1312 y: 168~681
-        const xOffset = config.mainLoc[0]
-        const yOffset = config.mainLoc[1]
-        const roi = img.roi(...config.mainLoc)
-        const filtered = colorFilter(roi, colors, threshold)
-        const closed = morphologyEx(filtered, "close", 4)
-        const contours = findContours(closed, 100).filter(
-            c => c.area < 420 && c.bbox[2] < 28 && c.bbox[3] < 28 && Math.abs(c.bbox[2] - c.bbox[3]) < 2
-        )
-        /** @type {{center: [number, number], bbox: [number, number, number, number], area: Mat}[]} */
-        const matches = []
-        for (const c of contours) {
-            const area = roi.roi(...c.bbox)
-            matches.push({
-                center: [c.center[0] + xOffset, c.center[1] + yOffset],
-                bbox: [c.bbox[0] + xOffset, c.bbox[1] + yOffset, c.bbox[2], c.bbox[3]],
-                area,
-            })
-        }
-        for (const match of matches) {
-            const di = await matchTemplate(match.area, this.yellowP, 10)
-            if (!di) continue
-            const windowCenter = [xOffset + config.mainLoc[2] / 2, yOffset + config.mainLoc[3] / 2]
-            const dx = match.center[0] - windowCenter[0]
-            const dy = match.center[1] - windowCenter[1]
-            const dyi = (dy * 496) / 239 // 椭圆转圆形
-            const deg = Math.atan2(dy, dx) * (180 / Math.PI)
-            const distance = Math.hypot(dx, dyi)
-            return {
-                match,
-                dx,
-                dy,
-                angle: degTo360(deg + 90),
-                distance,
-                out: distance > 420,
-            }
-        }
-    }
-
-    async start() {
-        const map = this.checkState(c.cap())
-        switch (map) {
-            case "zuoguai":
-                await c.fastMove()
-                await c.dash()
-                await c.fastMove()
-                await c.dash()
-                await c.fastMove()
-                await c.dash()
-                await c.turn(-90)
-                await c.fastMove()
-                await c.dash()
-                await c.turn(90)
-                await c.fastMove()
-                break
-            case "zhizou":
-                await c.fastMove()
-                await c.dash()
-                await c.fastMove()
-                await c.dash()
-                kd(c.hwnd, "d")
-                await c.kb("w", 2000)
-                ku(c.hwnd, "d")
-                await c.fastMove()
-                await c.dash()
-                await c.fastMove()
-                await c.dash()
-                kd(c.hwnd, "a")
-                await c.kb("w", 2000)
-                ku(c.hwnd, "a")
-                await c.fastMove()
-                break
-            case "youguai":
-                await c.fastMove()
-                await sleep(300)
-                await c.turn(90)
-                kd(c.hwnd, "a")
-                await c.kb("w", 2400)
-                ku(c.hwnd, "a")
-                await c.fastMove()
-                await c.fastMove()
-                await c.dash()
-                await c.fastMove()
-                kd(c.hwnd, "a")
-                await c.kb("w", 1000)
-                ku(c.hwnd, "a")
-                break
-        }
+    distance = 0
+    /** @param {*} door */
+    ocrDistance(door, md = 0) {
+        const numroi = c.frame.roi(door.match.bbox[0] - 4, door.match.bbox[1] + door.match.bbox[3] + 5, 32, 15)
+        let d = +this.numocr(numroi)
+        if (d >= 100) d = ~~(d / 10)
+        this.distance = Number.isFinite(d) ? d : md
+        setStatus("distance", this.distance)
     }
     async moveLoop() {
-        kd(c.hwnd, "w")
-        while (true) {
-            const d = await this.findColors(c.cap())
-            if (d) {
-                if (d.out) {
+        const t = new Timer()
+        c.kd("w")
+        await sleep(100)
+        while (!this.distance || this.distance > 5) {
+            c.ku("w")
+            c.kd("w")
+            const door = this.findYP(c.cap())
+            if (door) {
+                this.ocrDistance(door)
+                setStatus("route", `传统寻路: ${~~door.dx}, ${~~door.dy}`)
+                const first = this.projectOffsetToMm(door.dx, door.dy - 100, { out: door.out, rawDy: door.dy })
+                setStatus("yawDeg", first.yawDeg)
+                if (Math.abs(first.yawDeg) > 32) {
+                    await this.turn(45 * Math.sign(first.yawDeg))
+                    c.kd("w")
                 }
-            } else {
-                await c.turn(90)
             }
-            await sleep(config.ftime)
+            if (t.elapsed() > 20e3) {
+                console.error("超时")
+                break
+            }
+            await sleep(100)
         }
+        c.ku("w")
     }
 }
 
@@ -208,6 +233,18 @@ class MainState {
         return "unknown"
     }
 
+    /** @param {Mat} frame  */
+    checkMap(frame) {
+        let roi = frame.roi(55, 78, 129, 96)
+        roi = colorFilter(roi, [0x080908], 20)
+        const phash = perceptualHash(roi)
+        setStatus("地图代码", phash)
+        if (matchHammingHash(phash, config.banmap.split(","), 10) >= 0) {
+            return "exit"
+        }
+        return "keep"
+    }
+
     updateState() {
         this.state = this.checkState(c.cap())
     }
@@ -226,31 +263,66 @@ class MainState {
     }
     moved = false
     async next() {
-        const lastState = this.state
-        await this.waitUntil()
-        switch (this.state) {
-            case "unknown":
-                c.mc(757, 733)
-                break
-            case "r":
-                this.moved = false
-                await c.kb("r")
-                break
-            case "space":
-                await this.selectBoost(config.book)
-                break
-            case "battle":
-                if (!this.moved) {
-                    this.moved = true
-                    await sleep(2000)
-                    await c.play(config.actionstart)
-                }
-                if (!cc(c.frame, 1437, 799, 0xffffff, 10)) {
-                    await c.kb("q")
-                }
-                break
+        const t = new Timer()
+        /** @type {any} */ let bp = null
+        while (true) {
+            const lastState = this.state
+            await this.waitUntil()
+            switch (this.state) {
+                case "unknown":
+                    c.mc(757, 733)
+                    break
+                case "battle":
+                    if (!this.moved) {
+                        setStatus("fn", "start move")
+                        this.moved = true
+                        if (this.checkMap(c.frame) === "exit") {
+                            await c.kb("esc")
+                            await sleep(500)
+                            c.mc(1484, 822)
+                            await sleep(500)
+                            c.mc(978, 516)
+                            await sleep(2e3)
+                            break
+                        }
+                        await sleep(3000)
+                        await c.play(config.actionstart)
+                        await this.route.moveLoop()
+                        setStatus("fn", "end move")
+                    }
+                    if (!cc(c.frame, 1437, 799, 0xffffff, 10)) {
+                        await c.kb("q")
+                    }
+                    if (bp) {
+                        if (t.elapsed() > 10e3) {
+                            t.reset()
+                            bp.stop()
+                            setStatus("fn", "auto aim battle")
+                            await this.route.moveLoop()
+                            setStatus("fn", "auto aim end")
+                            bp = c.play(config.actionbattle)
+                        }
+                        break
+                    }
+                    setStatus("fn", "action battle")
+                    if (!bp) bp = c.play(config.actionbattle)
+
+                    break
+                case "r":
+                    if (bp) {
+                        setStatus("fn", "battle stop")
+                        bp.stop()
+                        bp = null
+                    }
+                    this.moved = false
+                    await c.kb("r")
+                    break
+                case "space":
+                    await this.selectBoost(config.book)
+                    break
+            }
+            await sleep(config.ftime)
         }
-        await sleep(config.ftime)
     }
     /** 选择倍率书 @param {number|string} [book=0]  */
     async selectBoost(book = 0) {
@@ -270,11 +342,14 @@ async function main() {
     if (config.single) {
         // await mainState.next()
         // await mainState.route.moveLoop()
-        await c.play("L0.4")
+        await c.play(config.actionstart)
+        let bp = null
+        bp = c.play(config.actionbattle)
+        await sleep(10e3)
+        bp.stop()
+        await sleep(10e3)
         return
     }
-    while (true) {
-        await mainState.next()
-    }
+    await mainState.next()
 }
 main()

@@ -8,7 +8,15 @@
 // @date 2026/08/06 14:08
 // ==/UserScript==
 import { Cap } from "cap"
-initOcr()
 const c = new Cap(getWindowByProcessName("EM-Win64-Shipping.exe"))
-const roi = c.frame.roi(1049, 160, 332, 499)
-export default ocrText(roi)
+
+async function main() {
+    let a = c.play("+0(e0.2 R0.1 d0.5 M #1)")
+    await sleep(5000)
+    a.stop()
+    console.log("wanle")
+    await sleep(3000)
+    console.log("end")
+}
+
+main()
