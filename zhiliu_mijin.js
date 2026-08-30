@@ -5,7 +5,7 @@
 // @author pa
 // @version 1.2.5
 // @category 其他
-// @date 2026/08/09 07:29
+// @date 2026/08/21 13:42
 // ==/UserScript==
 
 // 说明: 键位和视角设置全默认(!!!!) 视距1.3
@@ -862,6 +862,7 @@ async function battleLoop(state) {
             return
         } else if (state === "unknown") {
             rmc(1456, 808)
+            rmc(999, 506)
         }
         if (isBoss) {
             mt(hwnd) // 锁定BOSS
@@ -1163,6 +1164,7 @@ async function main() {
             case "unknown":
                 if (i++ > 5) {
                     rmc(1456, 808)
+                    rmc(999, 506)
                     i = 0
                 }
                 await sleep(300)

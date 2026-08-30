@@ -1,6 +1,6 @@
-const hwnd = getWindowByProcessName("EM-Win64-Shipping.exe")
+const hwnd = getForegroundWindow()
 if (!hwnd) throw new Error("未找到窗口")
-checkSize(hwnd, 1600, 930)
+// checkSize(hwnd, 1600, 930)
 function printPos() {
     const pos = getMousePos(hwnd)
     const text = `c.mc(${pos[0]},${pos[1] - 30})`

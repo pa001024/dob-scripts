@@ -13,3 +13,5 @@ const mute = readConfig("进程名", "需要静音的进程", "string", "EM-Win6
 
 setProgramVolume(mute, enable ? 0 : 1)
 setConfig("静音", !enable)
+moveWindow(getWindowByProcessName("EM-Win64-Shipping.exe"), 0, 0)
+

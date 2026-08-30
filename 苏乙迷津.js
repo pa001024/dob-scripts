@@ -1,11 +1,11 @@
 // ==UserScript==
-// @id JYVs5DxWME
+// @id twxhCLXbba
 // @name 苏乙迷津
 // @description 苏乙迷津 1.5
 // @author pa
 // @version 1.0.0
 // @category 其他
-// @date 2026/06/11 09:33
+// @date 2026/08/21 13:42
 // ==/UserScript==
 
 import { Cap } from "cap"

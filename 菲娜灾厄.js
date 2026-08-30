@@ -13,13 +13,14 @@ import { Cap } from "cap"
 
 const c = new Cap(getWindowByProcessName("EM-Win64-Shipping.exe"))
 
-const mode = readConfig("模式", "选择", { type: "select", options: ["登龙", "插地", "黎瑟", "芙罗拉"] }, "登龙")
+const mode = readConfig("模式", "选择", { type: "select", options: ["登龙", "插地", "黎瑟", "芙罗拉", "芙罗拉2"] }, "登龙")
 /** @type Record<string,string> */
 const t = {
     登龙: "+2(L0.1)L1.5",
     插地: "+3(L0.1)L0.4",
     黎瑟: "e0.2R0.1#1",
     芙罗拉: "e0.1#0.2L1",
+    芙罗拉2: "e0.1L0.9",
 }
 const code = t[mode]
 
@@ -28,7 +29,7 @@ async function main() {
     while (true) {
         if (cc(c.cap(), 47, 26, 0xffffff, 10)) {
             if (qtimer.elapsed() > 5e3) {
-                await c.play(mode === "黎瑟" || mode === "芙罗拉" ? "z" : "qz")
+                await c.play(mode === "黎瑟" || mode.includes("芙罗拉") ? "z" : "qz")
                 qtimer.reset()
             }
             await c.play(code)

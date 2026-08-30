@@ -1,11 +1,11 @@
 // ==UserScript==
 // @id 2pyOSUe1oQ
 // @name yehang
-// @description 夜航黎瑟/艾达基本通用
+// @description 夜航黎瑟/艾达基本通用 含80JJB
 // @author pa
 // @version 1.1.0
 // @category 其他
-// @date 2026/08/09 10:24
+// @date 2026/08/12 11:09
 // ==/UserScript==
 
 // 艾达可挂70新本/80jjb
@@ -22,6 +22,7 @@ const config = {
     actionstart: readConfig("开始时的动作", "标准动作序列 比如+2(L0.3#0.4)", "string", "+2(L0.3#0.4)"),
     actionbattle: readConfig("途中的动作", "标准动作序列 比如+0(e0.2 R0.1 d0.5 M #1)", "string", "+0(e0.2 R0.1 d0.5 M #1)"),
     banmap: readConfig("屏蔽地图", "地图代码 逗号分隔", "string", "39e4644ccda6b998,9ac35114ae38add6,9e8d79a64c89a670"),
+    isWalnut: readConfig("密函", "是否开核桃 如果不是 会自动点击下一波", "boolean", false),
 }
 
 class RouteState {
@@ -205,11 +206,13 @@ class RouteState {
             }
             if (t.elapsed() > 20e3) {
                 console.error("超时")
-                break
+                c.ku("w")
+                return false
             }
             await sleep(100)
         }
         c.ku("w")
+        return true
     }
 }
 
@@ -248,6 +251,24 @@ class MainState {
     updateState() {
         this.state = this.checkState(c.cap())
     }
+    /** 重置 */
+    async resetLoop(skip = false) {
+        setStatus("fn", "resetLoop")
+        c.kb("esc", 33)
+        await sleep(800)
+        if (!skip) {
+            await moveC(c.hwnd, 1115, 820 + c.yof, 300) // 设置
+            await sleep(500)
+            await moveC(c.hwnd, 563, 28 + c.yof, 500) // 其他
+            await moveC(c.hwnd, 1356, 632 + c.yof, 500) // 重置
+            await sleep(200)
+            c.mc(1010, 379)
+        }
+        await moveC(c.hwnd, 999, 506 + c.yof, 100) // 确定
+        await sleep(500)
+        c.mt()
+        await sleep(500)
+    }
 
     /**@param {string[]} [states] */
     async waitUntil(states, timeout = 0) {
@@ -266,10 +287,10 @@ class MainState {
         const t = new Timer()
         /** @type {any} */ let bp = null
         while (true) {
-            const lastState = this.state
             await this.waitUntil()
             switch (this.state) {
                 case "unknown":
+                    if (!config.isWalnut) c.mc(919, 618)
                     c.mc(757, 733)
                     break
                 case "battle":
@@ -298,7 +319,12 @@ class MainState {
                             t.reset()
                             bp.stop()
                             setStatus("fn", "auto aim battle")
-                            await this.route.moveLoop()
+                            if (!(await this.route.moveLoop())) {
+                                console.error("寻路失败 尝试reset")
+                                await sleep(200)
+                                await this.resetLoop()
+                                continue
+                            }
                             setStatus("fn", "auto aim end")
                             bp = c.play(config.actionbattle)
                         }
@@ -315,6 +341,7 @@ class MainState {
                         bp = null
                     }
                     this.moved = false
+                    console.log("开始新一轮")
                     await c.kb("r")
                     break
                 case "space":
