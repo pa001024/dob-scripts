@@ -1,11 +1,11 @@
 // ==UserScript==
 // @id iavUWdeN9g
 // @name 戏剧
-// @description 1.5
+// @description 1.6
 // @author pa
 // @version 1.0.0
 // @category 其他
-// @date 2026/08/02 01:32
+// @date 2026/09/28 14:20
 // ==/UserScript==
 
 import { Cap } from "cap"
@@ -67,7 +67,7 @@ function xijuCheck(frame) {
             return "battle"
         }
     }
-    if (cc(frame, 1059, 842, 0xe1b454, 10)) {
+    if (cc(frame, 1063, 841, 0xe1b454, 10)) {
         return "end"
     } else {
         if (cc(frame, 45, 274, 0xff4d55, 10)) {
@@ -209,7 +209,12 @@ async function startBattle() {
         updateState()
         if (state === "unknown") c.mc(1221, 846) // 重试
         if (state !== "battle" && state !== "unknown") break
-        if (config.mode === "艾达") await c.play("e0.1e2w0.3e0.1e2s0.3")
+        if (config.mode === "艾达" && cc(frame, 1428, 803, 0xE9E9E9, 10)) {
+            setStatus("q", "1")
+            await c.play("q2")
+            setStatus("q")
+        }
+        if (config.mode === "艾达") await c.play("w0 e0.2 w^ #0.3 s0 e0.2 s^ M #0.5 R0.1 #0.5 z")
         if (config.mode === "芙罗拉") {
             if (cc(c.frame, 1443, 803, 0xe9e9e9, 40)) await c.play("q2")
             await c.play("s0M e0.1#0.2L1 s")
@@ -237,8 +242,6 @@ async function main() {
                 case "move":
                     if (room.elapsed() > 2e3 && state === "move") {
                         await startMove()
-                        // 预输入
-                        if (config.mode === "艾达") await c.play("q2e0.2e1")
                     }
                     break
                 case "end": {
@@ -255,6 +258,10 @@ async function main() {
                 default:
                     await sleep(1000)
                     updateState()
+                    if (state === "unknown") {
+                        await sleep(1000)
+                        updateState()
+                    }
                     if (state === "unknown") c.mc(1221, 846) // 重试
                     await sleep(300)
                     break

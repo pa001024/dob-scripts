@@ -5,7 +5,7 @@
 // @author pa
 // @version 1.0.0
 // @category 活动
-// @date 2026/08/30 09:56
+// @date 2026/08/31 12:46
 // ==/UserScript==
 
 import { Cap } from "cap"
@@ -22,7 +22,7 @@ const config = {
         "伊薇"
     ),
     marcoi: readConfig("进场宏", "默认", "string", "#1.5 q#2.2 +4(e #0.5) w0 +2(#1 >) d0 w2 d^"),
-    marcob: readConfig("战斗宏", "默认为ws交替按e", "string", "z w0 e0.1 e2 w^ #0.3 s0 e0.1 e2 s^ #0.3"),
+    marcob: readConfig("战斗宏", "默认为ws交替按e", "string", "z0.1 w0.2 e0.1 e2 w^ #0.3 s0.2 s0 e0.1 e2 s^ #0.3"),
     skip: readConfig("跳过结算", "不记录分数", "boolean", false),
 }
 

@@ -5,7 +5,7 @@
 // @author pa
 // @version 1.1.0
 // @category 其他
-// @date 2026/08/12 11:09
+// @date 2026/09/25 22:48
 // ==/UserScript==
 
 // 艾达可挂70新本/80jjb
@@ -20,9 +20,10 @@ const config = {
     /** @type {ROI} */ minimapLoc: [30, 35, 180, 180],
     /** @type {ROI} */ mainLoc: [290, 169, 1020, 514],
     actionstart: readConfig("开始时的动作", "标准动作序列 比如+2(L0.3#0.4)", "string", "+2(L0.3#0.4)"),
-    actionbattle: readConfig("途中的动作", "标准动作序列 比如+0(e0.2 R0.1 d0.5 M #1)", "string", "+0(e0.2 R0.1 d0.5 M #1)"),
+    actionbattle: readConfig("途中的动作", "标准动作序列 比如+0(e0.2 R0.1 d0.5 M #1)", "string", "+0(w0 e0.2 w^ #0.3 s0 e0.2 s^ M #0.5 R0.1 #0.5 z)"),
     banmap: readConfig("屏蔽地图", "地图代码 逗号分隔", "string", "39e4644ccda6b998,9ac35114ae38add6,9e8d79a64c89a670"),
     isWalnut: readConfig("密函", "是否开核桃 如果不是 会自动点击下一波", "boolean", false),
+    isDef: readConfig("扼守", "是否扼守 如果是 会自动寻路到黄点", "boolean", false),
 }
 
 class RouteState {
@@ -292,6 +293,8 @@ class MainState {
                 case "unknown":
                     if (!config.isWalnut) c.mc(919, 618)
                     c.mc(757, 733)
+                    await c.kb("space")
+                    await sleep(500)
                     break
                 case "battle":
                     if (!this.moved) {
@@ -308,7 +311,7 @@ class MainState {
                         }
                         await sleep(3000)
                         await c.play(config.actionstart)
-                        await this.route.moveLoop()
+                        if (config.isDef) await this.route.moveLoop()
                         setStatus("fn", "end move")
                     }
                     if (!cc(c.frame, 1437, 799, 0xffffff, 10)) {
@@ -319,7 +322,7 @@ class MainState {
                             t.reset()
                             bp.stop()
                             setStatus("fn", "auto aim battle")
-                            if (!(await this.route.moveLoop())) {
+                            if (config.isDef && !(await this.route.moveLoop())) {
                                 console.error("寻路失败 尝试reset")
                                 await sleep(200)
                                 await this.resetLoop()
@@ -343,6 +346,7 @@ class MainState {
                     this.moved = false
                     console.log("开始新一轮")
                     await c.kb("r")
+                    await sleep(500)
                     break
                 case "space":
                     await this.selectBoost(config.book)
