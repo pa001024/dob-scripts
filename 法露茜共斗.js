@@ -5,7 +5,7 @@
 // @author pa
 // @version 1.0.0
 // @category 活动
-// @date 2026/10/05 06:14
+// @date 2026/10/05 09:25
 // ==/UserScript==
 
 import { Cap } from "cap"
@@ -100,13 +100,14 @@ async function main() {
         setStatus("state", g.state)
         /**  @param {Mat} f @param {number} x @param {number} y @param {number} w @param {number} cc */
         const fp = (f, x, y, w, cc) => {
-            const p = f.find_color(x, y, w, cc, 20, "ltr")
+            const p = f.find_color(x, y, w, cc, 40, "ltr")
             if (!p) return 0
             return ((p[0] - x) * 100) / w
         }
         if (g.state.startsWith("battle")) {
             g.ehp = fp(c.frame, 536, 63, 537, 0x2d2d2d)
             g.php = fp(c.frame, 125, 863, 175, 0x394047)
+            setStatus("php", g.php)
         }
     }, 100)
     const timer = new Timer()
@@ -120,7 +121,8 @@ async function main() {
                     if (s > g.stage && timer.elapsed() > 2e3) {
                         qcd.reset()
                         timer.reset()
-                        await c.play("q#1.6 M w0>0.1w^ #0.3") // 追BOSS
+                        console.debug("切换stage 执行跳QE")
+                        await c.play("M#0.1 _#0.3_#0.3 +3(q#0.3)#0.8 L #0.3e") // 追BOSS
                     }
                     g.stage = s
                     setStatus("stage", s)
@@ -129,11 +131,14 @@ async function main() {
                     if (pe && qcd.elapsed() > 3e3) {
                         ecd.reset()
                         qcd.reset()
-                        await c.play("M#0.1 _#0.3_#0.3 q#1.6 L #0.3e") // 小巧思 跳起来Q 然后砸地
+                        console.debug("E之后血没涨 执行QE")
+                        await c.play("M#0.1 +3(q#0.3)#0.8 L #0.3e") // 小巧思 跳起来Q 然后砸地
                         pe = false
                     }
-                    if (ecd.elapsed() > 1200) {
-                        await c.play("Me0.05#0.05")
+                    if (ecd.elapsed() > 1e3) {
+                        ecd.reset()
+                        console.debug("低血量 执行E")
+                        await c.play("M +2(e0.05#0.05)")
                         pe = true
                     }
                 }
