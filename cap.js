@@ -5,9 +5,9 @@
 // @author pa
 // @version 1.3.0
 // @category 开发工具
-// @date 2026/04/15 13:48
+// @date 2026/10/05 09:44
 // ==/UserScript==
-const hwnd = getCGWindow() || getWindowByProcessName("EM-Win64-Shipping.exe")
+const hwnd = getWindowByProcessName("EM-Win64-Shipping.exe")
 if (!hwnd) throw new Error("未找到窗口")
 checkSize(hwnd, 1600, 930)
 

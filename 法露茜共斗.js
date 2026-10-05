@@ -5,7 +5,7 @@
 // @author pa
 // @version 1.0.0
 // @category 活动
-// @date 2026/10/05 09:25
+// @date 2026/10/05 10:14
 // ==/UserScript==
 
 import { Cap } from "cap"
@@ -142,7 +142,7 @@ async function main() {
                         pe = true
                     }
                 }
-                await c.play("z+4(ML0.1#0.15) MR0.2")
+                await c.play("z+4(ML0.1#0.15) MR0.2 e#0.1")
                 break
             case "room":
                 // 剩余进度检测
