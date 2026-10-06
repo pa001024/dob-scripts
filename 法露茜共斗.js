@@ -93,6 +93,7 @@ function numocr(roi) {
 async function main() {
     let pe = false
     let count = 0
+    let fi = false
     const qcd = new Timer()
     const ecd = new Timer()
     setInterval(async () => {
@@ -105,8 +106,8 @@ async function main() {
             return ((p[0] - x) * 100) / w
         }
         if (g.state.startsWith("battle")) {
-            g.ehp = fp(c.frame, 536, 63, 537, 0x2d2d2d)
-            g.php = fp(c.frame, 125, 863, 175, 0x394047)
+            g.ehp = fp(c.frame, 536, 63, 537, 0x2d2d2d) || 100
+            g.php = fp(c.frame, 125, 863, 175, 0x394047) || 100
             setStatus("php", g.php)
         }
     }, 100)
@@ -117,6 +118,10 @@ async function main() {
             case "battle_lowhp":
                 const roi = c.frame.roi(60, 72, 24, 24)
                 const s = +numocr(roi)
+                if (fi) {
+                    await c.play("M#0.1_#0.3_#0.3 +3(q#0.3)#0.8 L")
+                    fi = false
+                }
                 if (s && s <= 10) {
                     if (s > g.stage && timer.elapsed() > 2e3) {
                         qcd.reset()
@@ -156,8 +161,14 @@ async function main() {
             case "enter":
                 // 筛选并进房
                 await c.play(
-                    "L(839, 742) L(137,779)#0.4 L(644,671)#0.1 L(281, 377)#0.1 L(377, 381)#0.1 L(474, 376)#0.1 L(969,673)#0.4 L(1416,227)#0.1 L(1190,775)#0.5"
+                    "L(839, 742)#0.1 L(137,779)#0.4 L(644,671)#0.1 L(281, 377)#0.1 L(377, 381)#0.1 L(474, 376)#0.1 L(969,673)#0.4 L(1416,227)#0.1"
                 ) // 铜币 红豆 JJB
+                if (cc(c.frame, 130, 779, 0xcdd4ec, 10)) {
+                    await c.play("L(1512,191)#0.1 L(1418,279)#0.1L(1190,775)#0.5")
+                    fi = true
+                } else {
+                    await c.kb("esc")
+                }
                 break
             case "finish":
                 console.log(`Excellent! finished ${++count} times`)

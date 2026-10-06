@@ -148,13 +148,61 @@ type DslQuote = '"' | "'"
 
 /** 小写字母 */
 type DslLetterLower =
-    | "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m"
-    | "n" | "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v" | "w" | "x" | "y" | "z"
+    | "a"
+    | "b"
+    | "c"
+    | "d"
+    | "e"
+    | "f"
+    | "g"
+    | "h"
+    | "i"
+    | "j"
+    | "k"
+    | "l"
+    | "m"
+    | "n"
+    | "o"
+    | "p"
+    | "q"
+    | "r"
+    | "s"
+    | "t"
+    | "u"
+    | "v"
+    | "w"
+    | "x"
+    | "y"
+    | "z"
 
 /** 大写字母到小写的映射，用于大括号语法的大小写不敏感比较 */
 type DslLowerMap = {
-    A: "a"; B: "b"; C: "c"; D: "d"; E: "e"; F: "f"; G: "g"; H: "h"; I: "i"; J: "j"; K: "k"; L: "l"; M: "m"
-    N: "n"; O: "o"; P: "p"; Q: "q"; R: "r"; S: "s"; T: "t"; U: "u"; V: "v"; W: "w"; X: "x"; Y: "y"; Z: "z"
+    A: "a"
+    B: "b"
+    C: "c"
+    D: "d"
+    E: "e"
+    F: "f"
+    G: "g"
+    H: "h"
+    I: "i"
+    J: "j"
+    K: "k"
+    L: "l"
+    M: "m"
+    N: "n"
+    O: "o"
+    P: "p"
+    Q: "q"
+    R: "r"
+    S: "s"
+    T: "t"
+    U: "u"
+    V: "v"
+    W: "w"
+    X: "x"
+    Y: "y"
+    Z: "z"
 }
 
 /** 大写字母 */
@@ -211,22 +259,24 @@ type DslTakeDigits<S extends string, Acc extends string = ""> = S extends `${inf
     : [Acc, S]
 
 /** 消费头部数字字面量（整数，可选小数部分），返回剩余串 */
-type DslTakeNumber<S extends string> = DslTakeDigits<S> extends [infer _Int extends string, infer AfterInt extends string]
-    ? AfterInt extends `.${infer Frac}`
-        ? DslTakeDigits<Frac> extends [infer _Frac extends string, infer AfterFrac extends string]
-            ? AfterFrac
-            : never
-        : AfterInt
-    : never
+type DslTakeNumber<S extends string> =
+    DslTakeDigits<S> extends [infer _Int extends string, infer AfterInt extends string]
+        ? AfterInt extends `.${infer Frac}`
+            ? DslTakeDigits<Frac> extends [infer _Frac extends string, infer AfterFrac extends string]
+                ? AfterFrac
+                : never
+            : AfterInt
+        : never
 
 /** 跳过空白后消费一个整数，返回剩余串；无整数时返回 never */
-type DslTakeInt<S extends string> = DslSkipWs<S> extends infer T extends string
-    ? T extends `${DslDigit}${string}`
-        ? DslTakeDigits<T> extends [infer _D extends string, infer R extends string]
-            ? R
+type DslTakeInt<S extends string> =
+    DslSkipWs<S> extends infer T extends string
+        ? T extends `${DslDigit}${string}`
+            ? DslTakeDigits<T> extends [infer _D extends string, infer R extends string]
+                ? R
+                : never
             : never
         : never
-    : never
 
 /** 若 S 以数字开头则消费该数字字面量，否则原样返回 */
 type DslConsumeNumber<S extends string> = S extends `${DslDigit}${string}` ? DslTakeNumber<S> : S
@@ -238,11 +288,7 @@ type DslSkipWs<S extends string> = S extends `${DslWhitespace}${infer R}` ? DslS
 type DslBraceModifier<S extends string> = S extends "down" | "up" ? "" : DslIsNumber<S> extends true ? "" : never
 
 /** 校验大括号内容中键名之后的部分（仅允许空白 + 修饰） */
-type DslBraceTail<S extends string> = S extends ""
-    ? ""
-    : S extends `${DslWhitespace}${string}`
-      ? DslBraceModifier<DslTrim<S>>
-      : never
+type DslBraceTail<S extends string> = S extends "" ? "" : S extends `${DslWhitespace}${string}` ? DslBraceModifier<DslTrim<S>> : never
 
 /**
  * 校验大括号内容的键名部分
@@ -271,37 +317,36 @@ type DslParseQuoted<S extends string> = S extends `${DslQuote}${infer C}${infer 
     : never
 
 /** 解析 `(x,y)` 内部（不含 `(`），返回 `)` 之后的剩余串 */
-type DslParseCoordPair<S extends string> = DslTakeInt<S> extends infer A1
-    ? [A1] extends [never]
-        ? never
-        : DslSkipWs<A1 & string> extends `,${infer A2}`
-          ? DslTakeInt<A2> extends infer A3
-              ? [A3] extends [never]
-                  ? never
-                  : DslSkipWs<A3 & string> extends `)${infer A4}`
-                    ? A4
-                    : never
+type DslParseCoordPair<S extends string> =
+    DslTakeInt<S> extends infer A1
+        ? [A1] extends [never]
+            ? never
+            : DslSkipWs<A1 & string> extends `,${infer A2}`
+              ? DslTakeInt<A2> extends infer A3
+                  ? [A3] extends [never]
+                      ? never
+                      : DslSkipWs<A3 & string> extends `)${infer A4}`
+                        ? A4
+                        : never
+                  : never
               : never
-          : never
-    : never
+        : never
 
 /** 解析鼠标节点尾部的可选保持秒数 */
-type DslMouseWait<S extends string> = DslSkipWs<S> extends infer T extends string
-    ? T extends `${DslDigit}${string}`
-        ? DslTakeNumber<T>
-        : T
-    : never
+type DslMouseWait<S extends string> =
+    DslSkipWs<S> extends infer T extends string ? (T extends `${DslDigit}${string}` ? DslTakeNumber<T> : T) : never
 
 /** 解析鼠标节点尾部（可选坐标 + 可选秒数），返回剩余串 */
-type DslMouseTail<S extends string> = DslSkipWs<S> extends infer T extends string
-    ? T extends `(${infer Inner}`
-        ? DslParseCoordPair<Inner> extends infer R
-            ? [R] extends [never]
-                ? never
-                : DslMouseWait<R & string>
-            : never
-        : DslMouseWait<T>
-    : never
+type DslMouseTail<S extends string> =
+    DslSkipWs<S> extends infer T extends string
+        ? T extends `(${infer Inner}`
+            ? DslParseCoordPair<Inner> extends infer R
+                ? [R] extends [never]
+                    ? never
+                    : DslMouseWait<R & string>
+                : never
+            : DslMouseWait<T>
+        : never
 
 /** 解析鼠标节点（L / R / M / X1 / X2），返回剩余串 */
 type DslParseMouse<S extends string> = S extends `L${infer R}`
@@ -317,47 +362,33 @@ type DslParseMouse<S extends string> = S extends `L${infer R}`
             : never
 
 /** 解析普通按键尾部的可选秒数或 `^`，返回剩余串 */
-type DslKeyTail<S extends string> = DslSkipWs<S> extends infer T extends string
-    ? T extends `^${infer R}`
-        ? R
-        : DslConsumeNumber<T>
-    : never
+type DslKeyTail<S extends string> =
+    DslSkipWs<S> extends infer T extends string ? (T extends `^${infer R}` ? R : DslConsumeNumber<T>) : never
 
 /** 解析普通按键（单字符键名），返回剩余串 */
-type DslParseKey<S extends string> = S extends `${infer C}${infer R}`
-    ? C extends DslKeyStart
-        ? DslKeyTail<R>
-        : never
-    : never
+type DslParseKey<S extends string> = S extends `${infer C}${infer R}` ? (C extends DslKeyStart ? DslKeyTail<R> : never) : never
 
 /** 解析 `#` 等待节点，返回剩余串 */
-type DslParseWait<S extends string> = DslSkipWs<S> extends infer T extends string
-    ? T extends `${DslDigit}${string}`
-        ? DslTakeNumber<T>
-        : never
-    : never
+type DslParseWait<S extends string> =
+    DslSkipWs<S> extends infer T extends string ? (T extends `${DslDigit}${string}` ? DslTakeNumber<T> : never) : never
 
 /** 解析分组体（不含 `(`），返回 `)` 之后的剩余串 */
-type DslParseGroup<S extends string> = DslParseNodes<S> extends infer R
-    ? [R] extends [never]
-        ? never
-        : R extends `)${infer Rest}`
-          ? Rest
-          : never
-    : never
+type DslParseGroup<S extends string> =
+    DslParseNodes<S> extends infer R ? ([R] extends [never] ? never : R extends `)${infer Rest}` ? Rest : never) : never
 
 /** 解析 `+` 循环节点，返回剩余串 */
-type DslParseLoop<S extends string> = DslTakeInt<S> extends infer A
-    ? [A] extends [never]
-        ? never
-        : DslSkipWs<A & string> extends infer T extends string
-          ? T extends ""
-              ? never
-              : T extends `(${infer Inner}`
-                ? DslParseGroup<Inner>
-                : DslParseNode<T>
-          : never
-    : never
+type DslParseLoop<S extends string> =
+    DslTakeInt<S> extends infer A
+        ? [A] extends [never]
+            ? never
+            : DslSkipWs<A & string> extends infer T extends string
+              ? T extends ""
+                  ? never
+                  : T extends `(${infer Inner}`
+                    ? DslParseGroup<Inner>
+                    : DslParseNode<T>
+              : never
+        : never
 
 /** 解析单个节点，返回剩余串；无法解析时返回 never */
 type DslParseNode<S extends string> = S extends `#${infer R}`
@@ -378,24 +409,20 @@ type DslParseNode<S extends string> = S extends `#${infer R}`
  * 解析节点序列
  * @returns 剩余串；遇到 `)` 时保留该字符返回，解析失败返回 never
  */
-type DslParseNodes<S extends string> = DslSkipWs<S> extends infer T extends string
-    ? T extends ""
-        ? ""
-        : T extends `)${string}`
-          ? T
-          : DslParseNode<T> extends never
-            ? never
-            : DslParseNodes<DslParseNode<T> & string>
-    : never
+type DslParseNodes<S extends string> =
+    DslSkipWs<S> extends infer T extends string
+        ? T extends ""
+            ? ""
+            : T extends `)${string}`
+              ? T
+              : DslParseNode<T> extends never
+                ? never
+                : DslParseNodes<DslParseNode<T> & string>
+        : never
 
 /** DSL 字符串是否合法 */
-type DslIsValid<S extends string> = DslParseNodes<S> extends infer R
-    ? [R] extends [never]
-        ? false
-        : DslSkipWs<R & string> extends ""
-          ? true
-          : false
-    : false
+type DslIsValid<S extends string> =
+    DslParseNodes<S> extends infer R ? ([R] extends [never] ? false : DslSkipWs<R & string> extends "" ? true : false) : false
 
 /**
  * DSL 宏类型：传入字面量时合法固化为原串、非法为 never；不传泛型时退化为宽 string（供函数参数等运行时字符串使用）
@@ -730,7 +757,7 @@ declare module "cap" {
         ): boolean
         /** 等待客户区指定坐标达到颜色条件 */
         waitColor(x: number, y: number, color: number, tolerance: number, timeout?: number): Promise<boolean>
-        /** 
+        /**
          * 播放 DSL 宏并返回可手动中断的 Promise
          * @param dsl 允许的表达式:{esc} _ 空格 > lshift C lctrl w0按下 w^弹起 w1按下1秒 #1等待1秒 +0(w1) 无限循环 +2(w1) 2次循环 L M R 鼠标点击 L(x,y) 鼠标点击(x,y)
          */
