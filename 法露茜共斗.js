@@ -5,7 +5,7 @@
 // @author pa
 // @version 1.1.0
 // @category 活动
-// @date 2026/10/06 18:05
+// @date 2026/10/09 19:48
 // ==/UserScript==
 
 import { Cap } from "cap"
@@ -185,7 +185,7 @@ async function main() {
     const remarkTarget = async () => {
         qcd.reset()
         console.debug("有伤害无回血：补Q重挂标记")
-        await c.play("q#0.3 L #0.2")
+        await c.play("+3(q0.1#0.3e0.1) L #0.2")
     }
 
     // ===== 检测2：常态攻击掉血检测 =====
@@ -211,7 +211,7 @@ async function main() {
                         qcd.reset()
                         timer.reset()
                         console.debug("切换stage 执行跳QE")
-                        await c.play("M#0.1 _#0.3_#0.3 +3(q#0.3)#0.8 L #0.3e") // 追BOSS
+                        await c.play("M#0.1 _#0.3_#0.3 +3(q0.1#0.3) +3(e0.1L)  #0.3e") // 追BOSS
                     }
                     g.stage = s
                     setStatus("stage", s)
