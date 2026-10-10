@@ -80,12 +80,12 @@ let max = 0
 async function handleFinish(frame, skip = false) {
     if (!skip) {
         let roi = frame.roi(724, 381, 147, 55)
-        let text = +ocrText(roi)
+        let text = +await ocrText(roi)
         const timer = new Timer()
         while (isNaN(text) || !text) {
             await sleep(300)
             roi = frame.roi(724, 381, 147, 55)
-            text = +ocrText(roi)
+            text = +await ocrText(roi)
             if (timer.elapsed() > 3e3) break
         }
         if (text) {

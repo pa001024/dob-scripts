@@ -30,7 +30,7 @@ async function main() {
     const chars = segmentChars(roi).map(v => roi.roi(...v))
     setStatus("chars", chars, chars.map(v => perceptualHash(v)).join("\n"))
     console.time("ocr")
-    const text = ocrText(roi)
+    const text = await ocrText(roi)
     console.timeEnd("ocr")
     setStatus("ocr", text)
     setStatus("code", `c.croi(c.frame.roi(${result.join(",")}), "${phash}", 10${pre === "滤色" ? `, 1, ${color}, ${p1}` : ""})`)

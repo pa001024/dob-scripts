@@ -5,7 +5,7 @@
 // @author pa
 // @version 1.1.0
 // @category 活动
-// @date 2026/10/09 19:48
+// @date 2026/10/10 14:11
 // ==/UserScript==
 
 import { Cap } from "cap"
@@ -31,8 +31,10 @@ const CFG = {
     ehpDownNeed: 0.3, // 认定"打出伤害"的 ehp 降幅(百分点)。ehp条537px，1px≈0.19%，0.3可滤1px抖动
     atkWindowMs: 2500, // 常态攻击检测窗口：这么久 ehp 还不掉就认为没打中(原1500太紧，BOSS转阶段无敌会误触发)
     eMinGap: 800, // E 节流：两次 E 至少间隔
-    qMinGap: 4000, // Q/M追踪节流：避免高频刷屏(原2500太短)
+    qMinGap: 4000, // Q补标记节流：轻量补Q至少间隔
+    chaseMinGap: 10000, // M跳追重冷却：两次重追踪至少间隔10s，专治“连续Q两次”
     eFailNeed: 2, // E验证连续失败几次才补Q/追踪：单次失败只记数，不动作，过滤偶发抖动
+    atkFailNeed: 2, // 攻击检测连续几个空窗口才追踪：单窗口没掉血(如dEhp=-0.19这种边缘值)只记数
 }
 
 /** @param {Mat} frame  */
@@ -107,6 +109,7 @@ async function main() {
     let fi = false
     const qcd = new Timer()
     const ecd = new Timer()
+    const chaseCd = new Timer() // 重追踪专用长冷却，和轻量补Q的qcd分开
     /**  @param {Mat} f @param {number} x @param {number} y @param {number} w @param {number} cc */
     const fp = (f, x, y, w, cc) => {
         const p = f.find_color(x, y, w, cc, 40, "ltr")
@@ -178,8 +181,9 @@ async function main() {
     // 怪物不在攻击范围内：M 中键锁定 + 跳起下落追踪 + Q 重挂 + 左键蹭一下
     const chaseTarget = async () => {
         qcd.reset()
+        chaseCd.reset()
         console.debug("E验证失败/目标丢失：M锁定跳追+补Q")
-        await c.play("M#0.1 _#0.3_#0.3 +3(q#0.3)#0.8 L")
+        await c.play("M#0.1 _#0.3_#0.3L +3(q#0.3)#0.8 L")
     }
     // 有伤害无回血：Q 标记掉了，轻量补 Q + 左键，不跳追
     const remarkTarget = async () => {
@@ -194,6 +198,8 @@ async function main() {
     let atkTRef = Date.now()
     // E验证连续失败计数：达到 eFailNeed 才补Q/追踪，单次失败只记数
     let eFailStreak = 0
+    // 攻击检测连续空窗口计数：达到 atkFailNeed 才追踪，单窗口边缘值(如-0.19)只记数
+    let atkFailStreak = 0
 
     const timer = new Timer()
     while (true) {
@@ -210,8 +216,8 @@ async function main() {
                     if (s > g.stage && timer.elapsed() > 2e3) {
                         qcd.reset()
                         timer.reset()
-                        console.debug("切换stage 执行跳QE")
-                        await c.play("M#0.1 _#0.3_#0.3 +3(q0.1#0.3) +3(e0.1L)  #0.3e") // 追BOSS
+                        console.debug("切换stage 执行QE")
+                        await c.play("M#0.1 +3(q0.1#0.3) +2(e0.2)  #0.3e") // 追BOSS
                     }
                     g.stage = s
                     setStatus("stage", s)
@@ -224,13 +230,20 @@ async function main() {
                     atkTRef = now
                 } else if (now - atkTRef > CFG.atkWindowMs) {
                     const dEhp = g.ehp - atkEhpRef
-                    if (dEhp > -CFG.ehpDownNeed && qcd.elapsed() > CFG.qMinGap) {
-                        // ehp defs 几乎没动：在打空气
-                        console.debug(`攻击无掉血 dEhp=${dEhp.toFixed(2)}，执行追踪`)
-                        await chaseTarget()
-                        atkEhpRef = g.ehp
-                        atkTRef = Date.now()
-                        break // 本轮不再普攻，下轮重新观察
+                    if (dEhp > -CFG.ehpDownNeed) {
+                        // 单窗口没掉血只记数，连续空窗口才追踪；追踪走长冷却chaseCd
+                        atkFailStreak++
+                        console.debug(`攻击掉血不足 dEhp=${dEhp.toFixed(2)} (${atkFailStreak}/${CFG.atkFailNeed})`)
+                        if (atkFailStreak >= CFG.atkFailNeed && chaseCd.elapsed() > CFG.chaseMinGap && qcd.elapsed() > CFG.qMinGap) {
+                            console.debug(`攻击连续无掉血，执行追踪`)
+                            await chaseTarget()
+                            atkFailStreak = 0
+                            atkEhpRef = g.ehp
+                            atkTRef = Date.now()
+                            break // 本轮不再普攻，下轮重新观察
+                        }
+                    } else {
+                        atkFailStreak = 0
                     }
                     atkEhpRef = g.ehp
                     atkTRef = now
@@ -247,12 +260,10 @@ async function main() {
                     console.debug("低血量 执行E")
                     await c.play("M +2(e0.05#0.05)")
                     const res = await verifyE(before)
-                    // 验证后刷新攻击检测参考点，避免重复触发检测2
-                    atkEhpRef = g.ehp
-                    atkTRef = Date.now()
                     if (res === "ok") {
                         console.debug("E验证通过：回上血且怪掉血")
                         eFailStreak = 0
+                        atkFailStreak = 0 // E打出伤害了，攻击检测也一并清零，避免刚E完又被检测2追一次
                     } else if (res === "needQ") {
                         // 怪掉血但自己没回 = Q标记掉了，连续失败才补Q
                         eFailStreak++
@@ -262,15 +273,20 @@ async function main() {
                             eFailStreak = 0
                         }
                     } else {
-                        // 两者都没动 = 怪不在范围，连续失败才M锁定跳追
+                        // 两者都没动 = 怪不在范围，连续失败+长冷却才M锁定跳追
                         eFailStreak++
                         console.debug(`E验证:目标丢失(${eFailStreak}/${CFG.eFailNeed})`)
-                        if (eFailStreak >= CFG.eFailNeed && qcd.elapsed() > CFG.qMinGap) {
+                        if (eFailStreak >= CFG.eFailNeed && chaseCd.elapsed() > CFG.chaseMinGap && qcd.elapsed() > CFG.qMinGap) {
                             await chaseTarget()
                             eFailStreak = 0
+                            atkFailStreak = 0
                         }
-                        // 节流中或次数不够：什么都不做，等下次E再验证(之前这里会绕过节流直接补Q，是频繁Q的主因)
+                        // 次数不够或冷却中：什么都不做，等下次E再验证
                     }
+                    // 基准点在动作完成后刷新：之前在chase之前刷新会导致追踪的伤害没计入，
+                    // 下一个攻击窗口拿着旧基准对比，很容易再判一次“无掉血”形成连Q
+                    atkEhpRef = g.ehp
+                    atkTRef = Date.now()
                     break // 本轮不再发普攻串，避免掩盖刚验证出的趋势
                 }
                 await c.play("z+4(ML0.1#0.15) MR0.2 e#0.1")

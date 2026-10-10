@@ -16,7 +16,7 @@ async function main() {
     const t = readConfig("t", "截图间隔(ms) 设为0单次截图", "number", 0)
     const timer = new Timer()
     while (true) {
-        const img = captureWindow(hwnd, 0, 30, 1600, 900)
+        const img = captureWindowWGC(hwnd, 0, 30, 1600, 900)
         imwrite(`imgs/cap${i}.png`, img)
         console.log(`imgs/cap${i}.png`)
         i++

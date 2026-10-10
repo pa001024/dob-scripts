@@ -1166,6 +1166,9 @@ declare function captureWindow(hwnd: number, x?: number, y?: number, w?: number,
  */
 declare function captureWindowWGC(hwnd: number, x?: number, y?: number, w?: number, h?: number): Mat
 
+/** 运行计数 JSON，hwnd 为空时汇总全部服务器。 */
+declare function wgcStats(hwnd?: number): string
+
 /**
  * 获取窗口客户区位置与尺寸。
  * @param hwnd 窗口句柄
@@ -1267,7 +1270,7 @@ declare function existsFile(path: string): boolean
  * @returns 实际使用的本地资源目录
  * @throws 初始化失败时抛出错误
  */
-declare function initOcr(localRootDir?: string, cdnBaseUrl?: string, numThread?: number): string
+declare function initOcr(localRootDir?: string, cdnBaseUrl?: string, numThread?: number, poolSize?: number): string
 
 /**
  * OCR 文字识别（输入 Mat，返回文本）。
@@ -1275,7 +1278,8 @@ declare function initOcr(localRootDir?: string, cdnBaseUrl?: string, numThread?:
  * @returns 识别文本（失败或无结果时可能为空字符串）
  * @throws OCR 未初始化或识别失败时抛出错误
  */
-declare function ocrText(imgMat: Mat): string
+/** OCR 文字识别，阻塞部分在后台线程执行。 */
+declare function ocrText(imgMat: Mat): Promise<string>
 
 /**
  * 保存Mat对象到文件
