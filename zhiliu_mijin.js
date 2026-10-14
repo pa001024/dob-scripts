@@ -5,7 +5,7 @@
 // @author pa
 // @version 1.2.5
 // @category 其他
-// @date 2026/08/21 13:42
+// @date 2026/10/10 15:11
 // ==/UserScript==
 
 // 说明: 键位和视角设置全默认(!!!!) 视距1.3
@@ -27,7 +27,6 @@ const config = {
     useTripleDoorBuffer: readConfig("三重缓冲", "一定程度上降低找门抖动", "boolean", true),
     moveTimeout: readConfig("移动超时", "移动超时重置间隔(秒)", "number", 25),
     ftime: readConfig("帧间隔", "取帧间隔(毫秒)", "number", 100),
-    lock: readConfig("密码", "请查看说明以获取密码", "string"),
     frameless: readConfig("无边框", "无边框窗口", "boolean", false),
     debug: readConfig("debug", "-", "boolean", false),
     single: readConfig("single", "单帧识别", "boolean", false),
@@ -1021,10 +1020,6 @@ function ocrDistance(door, md = 0) {
 }
 
 async function main() {
-    if (config.lock !== "6") {
-        console.error("请查看文件开头的说明并填写密码")
-        return
-    }
     if (config.single) {
         console.log("single")
         gameState.state = checkState(frame)
