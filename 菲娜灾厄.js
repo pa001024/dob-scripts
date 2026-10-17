@@ -5,7 +5,7 @@
 // @author pa
 // @version 1.0.0
 // @category 其他
-// @date 2026/09/25 22:48
+// @date 2026/10/17 01:55
 // ==/UserScript==
 
 import { Cap } from "cap"
@@ -38,7 +38,8 @@ async function main() {
             }
             await c.play(code)
         } else {
-            c.mc(1071,557)
+            console.log("next")
+            await c.play("L(1111,613) #0.1 L(1071,557)")
             await sleep(200)
         }
         await sleep(0)

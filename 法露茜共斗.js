@@ -3,7 +3,7 @@
 // @name 法露茜共斗
 // @description 没细调 but it works
 // @author pa
-// @version 1.1.0
+// @version 1.2.0
 // @category 活动
 // @date 2026/10/12 08:52
 // ==/UserScript==
@@ -12,7 +12,7 @@ import { Cap } from "cap"
 
 const c = new Cap(getWindowByProcessName("EM-Win64-Shipping.exe"))
 
-// initOcr()
+initOcr()
 
 const g = {
     /** @type ReturnType<checkState> */
@@ -22,6 +22,51 @@ const g = {
     stage: 0,
     debug: false,
     t: 0, // 双血条最后一次成功采样的时刻，后台 interval 维护
+}
+
+// ===== 选房(舞台大厅)：剩余进度 OCR ====
+// 基于 imgs/cap129.png 标定(1600x900 客户区)：
+// 每行 "100%" 数字区 ROI + 右侧箭头点击点，行间距约110px
+const ROOM_ROWS = [
+    { ocr: [1290, 200, 90, 40], click: [1415, 228] },
+    { ocr: [1290, 312, 90, 40], click: [1415, 338] },
+    { ocr: [1290, 422, 90, 40], click: [1415, 448] },
+    { ocr: [1290, 532, 90, 40], click: [1415, 558] },
+    { ocr: [1290, 642, 90, 40], click: [1415, 668] },
+]
+
+/** 粗判是否为满进度房：包含 "100" 即算(兼容 1000%/100/ 等误识)，87%/45%/10% 不会误命中
+ * @param {any} t
+ */
+function isFullRoomText(t) {
+    if (!t) return false
+    const s = String(t).replace(/\s+/g, "")
+    if (s.includes("100")) return true
+    if (/1[O0]0/.test(s)) return true
+    return false
+}
+
+/** OCR 5 行剩余进度，随机返回一个 100% 房下标，无则返回 -1
+ * @param {Mat} frame
+ */
+async function pickFullRoom(frame) {
+    const full = []
+    for (let i = 0; i < ROOM_ROWS.length; i++) {
+        const [x, y, w, h] = ROOM_ROWS[i].ocr
+        try {
+            const roi = frame.roi(x, y, w, h)
+            const big = roi.resize(w * 2, h * 2, "cubic")
+            const t = await ocrText(big)
+            console.debug(`选房OCR[${i}]: ${JSON.stringify(t)}`)
+            if (g.debug) setStatus("room" + i, big, String(t || ""))
+            if (isFullRoomText(t)) full.push(i)
+        } catch (e) {
+            console.debug(`选房OCR[${i}]失败: ${e instanceof Error ? e.message : e}`)
+        }
+    }
+    setStatus("rooms", full.length ? `100%房: ${full.join(",")}` : "无100%房")
+    if (!full.length) return -1
+    return full[(Math.random() * full.length) | 0]
 }
 
 // ===== 可调参数 =====
@@ -402,18 +447,35 @@ async function main() {
             case "room_esc":
                 await c.play("{esc} #1 L(1190,775) #1")
                 break
-            case "enter":
-                // 筛选并进房
+            case "enter": {
+                // 筛选(铜币 红豆 JJB)：去掉原末尾固定点第一间的 L(1416,227)，改为下方OCR选100%房
                 await c.play(
-                    "L(839, 742)#0.1 L(137,779)#0.4 L(644,671)#0.1 L(281, 377)#0.1 L(377, 381)#0.1 L(474, 376)#0.1 L(969,673)#0.4 L(1416,227)#0.1"
-                ) // 铜币 红豆 JJB
-                if (cc(c.frame, 130, 779, 0xcdd4ec, 10)) {
-                    await c.play("L(1512,191)#0.1 L(1418,279)#0.1L(1190,775)#0.5")
-                    fi = true
-                } else {
+                    "L(839, 742)#0.1 L(137,779)#0.4 L(644,671)#0.1 L(281, 377)#0.1 L(377, 381)#0.1 L(474, 376)#0.1 L(969,673)#0.4 #0.5"
+                )
+                if (!cc(c.cap(), 130, 779, 0xcdd4ec, 10)) {
                     await c.kb("esc")
+                    break
                 }
+                // 可选排序：按剩余进度排(保留原1512,191逻辑)，让100%靠前，失败也不影响OCR随机
+                await c.play("L(1512,191)#0.5")
+                // OCR 5行剩余进度，优先随机选100%房，避免固定点第一间踩到非100%
+                let idx = -1
+                try {
+                    idx = await pickFullRoom(c.cap())
+                } catch (e) {
+                    console.debug(`选房OCR异常走兜底: ${e instanceof Error ? e.message : e}`)
+                }
+                if (idx < 0) {
+                    console.debug("选房: 无100%房，刷新重试")
+                    await c.play("L(1190,775)#0.5") // 无弹窗时命中刷新按钮，有弹窗时命中确认，复用原坐标
+                    break
+                }
+                const [cx, cy] = ROOM_ROWS[idx].click
+                console.debug(`选房: 100%房[${idx}] L(${cx},${cy})`)
+                await c.play(`L(${cx},${cy})#0.5 L(1190,775)#0.5`)
+                fi = true
                 break
+            }
             case "finish":
                 console.log(`Excellent! finished ${++count} times`)
                 c.mc(839, 742)
