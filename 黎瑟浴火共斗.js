@@ -5,14 +5,15 @@
 // @author pa
 // @version 1.0.0
 // @category 活动
-// @date 2026/11/10 16:19
+// @date 2026/11/10 17:06
 // ==/UserScript==
 
 // 黎瑟·浴火 共斗循环：
-//   1. 进图(刚加入房间后第一次进入战斗)：执行开场宏 w #0.5 _0.5 _0.3 q w^ {5}#0.1{6}
+//   1. 进场判定：右下角Q图标角标显示"30"(大招未开)即视为重新进场(首次进场/重打/换场)，
+//      执行开场宏 w #0.5 _0.5 _0.3 q w^ {5}#0.1{6}
 //      (按W、两次空格分别按住0.5s/0.3s、开大、松开W、隔0.1s按5和6召唤协战同伴扶疏/煜明)
-//   2. 之后大招(Q)按右下角Q图标角标判定：显示"30"=未开 -> 按Q开；显示"0"=已开 -> 不按
-//      (Q是开关，开着再按会关掉；开场宏里的Q是一次性的，与这里的角标判定互不冲突)
+//   2. 角标显示"0"(大招已开)则不按Q(Q是开关，开着再按会关掉)；
+//      角标变回"30"时同样会再走一遍开场宏，所以重打不会漏召唤协战
 //   3. 每枪：开枪后按住 E 瞄准 boss(一直按住到下一枪)，蓄力满(准星出现亮粉色光环)立刻左键开枪
 //      只靠截图轮询必然慢半拍：额外测量蓄力光环半径做线性外推，预测满蓄力时刻，
 //      提前进入高频截图确认(12ms)，满的瞬间立刻开枪，全程不依赖 OCR
@@ -102,8 +103,9 @@ function chooseFullRoom(texts) {
     return full[(Math.random() * full.length) | 0]
 }
 
-/** OCR 5 行剩余进度，随机返回一个 100% 房下标，无则返回 -1
+/** OCR 5 行剩余进度，随机返回一个 100% 房下标(无则 -1)，同时带回每行文本
  * @param {Mat} frame
+ * @returns {Promise<{ idx: number, texts: string[] }>}
  */
 async function pickFullRoom(frame) {
     const texts = await ocrRoomRows(frame)
@@ -112,27 +114,25 @@ async function pickFullRoom(frame) {
         if (isFullRoomText(texts[i])) full.push(i)
     }
     setStatus("rooms", full.length ? `100%房: ${full.join(",")}` : "无100%房")
-    if (!full.length) return -1
-    return full[(Math.random() * full.length) | 0]
+    const idx = full.length ? full[(Math.random() * full.length) | 0] : -1
+    return { idx, texts }
 }
 
 // ===== 参数(宏直接写死) =====
 const CFG = {
-    // 开场宏(刚加入房间后第一次进入战斗)：
+    // 开场宏(右下角Q图标角标显示"30"大招未开时执行 = 首次进场/重打/换场)：
     //   w -> 等0.5s -> 空格按住0.5s -> 空格按住0.3s -> q 开大 -> w^ 松开W
     //   -> {5} 等0.1s {6} 召唤协战同伴(扶疏/煜明)
     // 两次空格必须带按住时长(_0.5/_0.3)：用 {space} 瞬点会被游戏吞掉
-    // 开场Q无条件按；之后是否开大仍由右下角Q图标角标判定，两者不冲突
     // 注意 5/6 必须写成 {5}..{6}：直接写 56 会被解析成"按住5键6秒"
-    macroEnter: "w #0.5 _0.5 _0.3 q w^ {5}#0.1{6}",
-    macroQ: "q#0.4", // 开大按键：仅在Q图标角标显示"30"(未开)时按
+    macroEnter: "w #0.5 _0.5 _0.3 q w^ {5}#0.1{6} #1 +5(e#0.3)",
     // 长按E瞄准：按下/松开拆开，按住期间实时监控蓄力，开枪前松开、下一枪前再按下
     macroAimDown: "e0",
     macroAimUp: "e^",
     aimDelayMs: 100, // 开枪/开大后隔多久按下E(按下后一直按住到开枪)
     // 蓄力时间上限(ms)数组：任意长度，按顺序循环开枪
     // 开枪后最多等这么久就开枪(期间蓄力满会提前开枪)；进图/开大后的第一枪不设上限
-    shotCycle: [1300, 1000, 1000],
+    shotCycle: [1300, 960, 960],
     /** 蓄力满时准星外围亮粉色光环的采样点(1600x900)，见 imgs/cap17/20/22/24/27/32.png */
     fullRingPts: /** @type {[number, number][]} */ ([
         [755, 439],
@@ -156,6 +156,8 @@ const CFG = {
     ringLostMs: 15000, // 多久没看到满蓄力光环判定为脱镜(正常蓄力周期约4~10秒，留足余量)
     recoverGapMs: 3000, // 补开镜的最小间隔
     qRetryMs: 4000, // 大招未开时按Q的重试间隔(等演出/输入生效，避免连按把大招开关来回切)
+    // 选房：开启后当前屏幕没有100%房就直接随机进一间，不再自动滚屏找100%(默认关)
+    randomRoomNoScroll: readConfig("无100%随机进房", "开启后屏幕内无100%房就随机进一间，不自动滚屏找", "boolean", false),
     roomScrollMax: 8, // 选房：单轮无100%时最多向下滚动次数，找遍当前列表
     roomScrollWheel: -360, // 选房：每次滚动量(负数向下)
     roomScrollDelayMs: 700, // 选房：滚后等待列表稳定再OCR
@@ -325,7 +327,6 @@ function ringRadius(f) {
 
 async function main() {
     let count = 0
-    let fi = false // 刚加入房间：进战斗后先召唤协战同伴+开大
     let noFullStreak = 0 // 选房：连续"滚到底仍无100%"的 enter 轮数，超限则兜底进房防死循环
     let busyUntil = 0 // 进图/开大动作期间暂停蓄力判定
     let lastRingAt = Date.now() // 最后一次看到满蓄力光环(准星粉色圈)的时刻
@@ -440,32 +441,20 @@ async function main() {
         switch (g.state) {
             case "battle":
             case "battle_lowhp": {
-                // --- 进图：开场宏(W+两次空格+Q开大+松开W+5/6召唤协战同伴) ---
-                if (fi) {
-                    fi = false
-                    await releaseAim() // 防上一场遗留的E按住
-                    dlog("进图：开场宏(W+空格+Q+5/6)")
-                    await c.play(CFG.macroEnter)
-                    // 开场宏里已经按过Q：刷新Q时刻，避免Q图标角标还没刷新时再按一次把大招关掉
-                    lastQAt = Date.now()
-                    lastShotAt = Date.now() // 开大后重新计算瞄准延迟
-                    lastRingAt = Date.now()
-                    shotIdx = 0 // 进图第一枪不设蓄力上限，蓄到满
-                    busyUntil = Date.now() + 3000 // 大招演出期间暂停蓄力判定
-                }
-
-                // --- 大招状态：Q图标角标 "30"=未开 -> 按Q；"0"=已开 -> 不按(Q是开关) ---
+                // --- 大招未开(角标"30") = 重新进场(首次/重打/换场)：执行开场宏 ---
+                // 开场宏包含 W+两次空格+Q开大+5/6召唤协战同伴；角标"0"=已开则不按(Q是开关)
                 if (!isUltActive(c.frame)) {
-                    dstatus("ult", "大招未开")
+                    dstatus("ult", "大招未开(视为重新进场)")
                     if (Date.now() - lastQAt > CFG.qRetryMs) {
                         lastQAt = Date.now()
-                        await releaseAim()
+                        await releaseAim() // 防上一场遗留的E按住
+                        dlog("大招未开：执行开场宏(W+空格+Q+5/6)")
+                        await c.play(CFG.macroEnter)
+                        // 开场宏里已经按过Q：刷新Q时刻，避免角标还没刷新时再按一次把大招关掉
                         lastShotAt = Date.now() // 开大后重新计算瞄准延迟
                         lastRingAt = Date.now()
-                        shotIdx = 0 // 开大后第一枪不设蓄力上限
-                        dlog("大招未开：按Q开大")
-                        await c.play(CFG.macroQ)
-                        busyUntil = Date.now() + 3000
+                        shotIdx = 0 // 进场第一枪不设蓄力上限，蓄到满
+                        busyUntil = Date.now() + 3000 // 大招演出期间暂停蓄力判定
                     }
                     break
                 }
@@ -550,10 +539,7 @@ async function main() {
                 }
 
                 // 长时间看不到满蓄力光环：大概率脱镜，补 R 开镜
-                if (
-                    Date.now() - Math.max(lastRingAt, lastShotAt) > CFG.ringLostMs &&
-                    Date.now() - lastRecoverAt > CFG.recoverGapMs
-                ) {
+                if (Date.now() - Math.max(lastRingAt, lastShotAt) > CFG.ringLostMs && Date.now() - lastRecoverAt > CFG.recoverGapMs) {
                     lastRecoverAt = Date.now()
                     await releaseAim()
                     dlog("长时间未见满蓄力：R补开镜")
@@ -562,9 +548,8 @@ async function main() {
                 break
             }
             case "room":
-                // 剩余进度检测；点"参与演绎"进图，进图后先召唤协战同伴
+                // 剩余进度检测；点"参与演绎"进图(进图后由大招角标判定触发开场宏)
                 if (cc(c.frame, 121, 509, 0xffde9e, 10)) {
-                    fi = true
                     await c.play("L(940,742) #2")
                 } else await c.play("{esc}")
                 break
@@ -584,16 +569,28 @@ async function main() {
                 await c.play("L(1512,191)#0.5")
                 // OCR 5行剩余进度，优先随机选100%房，避免固定点第一间踩到非100%
                 // 无100%则向下滚动继续找，直到找到 / 滚到底 / 达到滚动上限
+                // 「无100%随机进房」开启时：当前屏幕没有100%就直接随机进一间，不滚屏
                 let idx = -1
+                let texts = []
                 try {
-                    idx = await pickFullRoom(c.cap())
+                    const picked = await pickFullRoom(c.cap())
+                    idx = picked.idx
+                    texts = picked.texts
+                    if (idx < 0 && CFG.randomRoomNoScroll) {
+                        const rows = []
+                        for (let i = 0; i < texts.length; i++) {
+                            if (String(texts[i] || "").trim()) rows.push(i)
+                        }
+                        idx = rows.length ? rows[(Math.random() * rows.length) | 0] : (Math.random() * ROOM_ROWS.length) | 0
+                        dlog(`选房: 当前屏幕无100%，不滚屏，随机进房[${idx}]`)
+                        setStatus("rooms", `随机进房: ${idx}`)
+                    }
                     if (idx < 0) {
                         let prevKey = ""
                         let staleRounds = 0
                         for (let sc = 0; sc < CFG.roomScrollMax && idx < 0; sc++) {
                             wheel(c.hwnd, 800, 450, CFG.roomScrollWheel)
                             await sleep(CFG.roomScrollDelayMs)
-                            let texts = []
                             try {
                                 texts = await ocrRoomRows(c.cap())
                             } catch (e) {
@@ -628,7 +625,6 @@ async function main() {
                         noFullStreak = 0
                         const [fx, fy] = ROOM_ROWS[0].click
                         await c.play(`L(${fx},${fy})#0.5 L(1190,775)#0.5`)
-                        fi = true
                         break
                     }
                     dlog(`选房: 无100%房(已滚到底 ${noFullStreak}/${CFG.roomRefreshMax})，刷新重试`)
@@ -637,9 +633,8 @@ async function main() {
                 }
                 noFullStreak = 0
                 const [cx, cy] = ROOM_ROWS[idx].click
-                dlog(`选房: 100%房[${idx}] L(${cx},${cy})`)
+                dlog(`选房: 房间[${idx}] L(${cx},${cy})`)
                 await c.play(`L(${cx},${cy})#0.5 L(1190,775)#0.5`)
-                fi = true
                 break
             }
             case "finish":
