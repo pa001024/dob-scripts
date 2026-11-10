@@ -3,15 +3,14 @@
 // @name zhiliu_mijin
 // @description 止流迷津 1.5
 // @author pa
-// @version 1.2.5
+// @version 1.2.9
 // @category 其他
-// @date 2026/10/10 15:11
+// @date 2026/11/05 10:14
 // ==/UserScript==
 
 // 说明: 键位和视角设置全默认(!!!!) 视距1.3
 // 止流带专武赘生雷月卡/球球蜂 不推荐带防御魔灵 打慢了缺蓝直接寄 潜质攻击威力昂扬老道
 // 难度根据情况选 6命选270/300 2命选240
-// 密码: 6
 
 const config = {
     门顺序: readConfig(
@@ -30,9 +29,15 @@ const config = {
     frameless: readConfig("无边框", "无边框窗口", "boolean", false),
     debug: readConfig("debug", "-", "boolean", false),
     single: readConfig("single", "单帧识别", "boolean", false),
+    aimLog: readConfig("瞄准日志", "aim阶段每tick打一行log(排查摇头)", "boolean", false),
+    aimShot: readConfig("瞄准截图", "aim时定时imwrite帧到imgs/aim_xxxx.png", "boolean", false),
+    aimShotGap: readConfig("截图间隔", "aim截图间隔tick数(100ms/tick)", "number", 10),
     battleTime: readConfig("战斗超时", "超时暂离(秒)", "number", 120) * 1e3,
     /** @type {ROI} */ minimapLoc: [30, 35, 180, 180],
-    /** @type {ROI} */ mainLoc: [290, 169, 1020, 514],
+    /** @type {ROI} */ mainLoc: [290, 169, 1020, 560],
+    // 视角光心（寻路几何基准）：out/距离/角度全部相对它计算。
+    // 扩大 mainLoc 扫描范围时保持不动，否则已标定的 out 阈值全部失效。
+    /** @type {[number, number]} */ viewCenter: [800, 426],
 }
 const hwnd = getWindowByProcessName("EM-Win64-Shipping.exe")
 if (!hwnd || !isElevated()) throw new Error("未找到窗口或非管理员权限")
@@ -44,41 +49,101 @@ function cap13() {
 }
 /** @param {number} x @param {number} y */
 function rmc(x, y) {
-    return mc(hwnd, x, y + yof)
+    return moveC(hwnd, x, y + yof)
 }
 
 let frame = cap13()
 let autoAimX = false
 let autoAimY = false
+/** fastMove/远距离跳跃飞行中为 true，此时禁止小地图转身与 X 轴 aim，避免飞到一半转回来 */
+let isFlying = false
 const autoAimoffsetY = -150
 let findFn = findDoor
 /** @typedef {NonNullable<ReturnType<typeof findDoor>>} DoorInfo */
 /** @type {DoorInfo[]} */
 const doorTripleBuffer = []
 let bufferedFindFn = findFn
+// aim观测：tick序号 + 截图计数（只记录不干预，排查摇头用）
+let aimTick = 0
+let aimShotN = 0
+const AIM_SHOT_MAX = 120
 
 /**
- * 门识别三重缓冲：
- * - 当前帧无门：不写入、不清空，直接返回空
- * - 缓冲不足3帧：直接返回当前帧结果
- * - 缓冲满3帧后：仅当最近3帧目标颜色一致时才输出
- * @param {DoorInfo | undefined} rawDoor
+ * 门识别三重缓冲 + 跟踪平滑（治摇头，实测 log 驱动）：
+ * 1. 颜色按族一致（大红/小红同属红）：徽记中心单像素分类闪烁不再导致输出丢失 + spin 交替。
+ * 2. out 迟滞（Schmitt：>1.0 进入，<0.9 解除，灰带沿用上一帧）：同一门在边界两侧
+ *    （如 normR 0.99/0.93）不再让 yaw 计算在直接 atan/atan2 两律间横跳（-154° vs -22°）。
+ * 3. 位置迟滞：同族候选跳变时，若旧目标仍在当前帧候选中且不比新目标差，保持旧目标
+ *    （多门/噪点轮流被选中）；旧目标消失则立即切换，不跟转身/走过打架。
+ * 4. 短暂丢失惯性：连续丢失≤2帧沿用旧目标（技能光遮挡一闪），之后才真正放手。
+ * @param {DoorInfo | undefined} rawDoor 当前帧选择结果
+ * @param {{center: [number, number], color: string, door: DoorInfo}[]} [candidates] 当前帧全部候选
  * @returns {DoorInfo | undefined}
  */
-function getBufferedDoor(rawDoor) {
+const TRACK_R = 120 // 锚点有效半径（像素）：旧目标在此范围内都算“还在”
+const HYST_BAND = 50 // 切换迟滞带（像素）：新目标必须比旧目标靠近中心这么多才切换
+const COAST_N = 2 // 丢失惯性帧数
+const OUT_ON_R = 1.0 // out 进入阈值（原始 0.95 在边界抖，见 log #43/#44）
+const OUT_OFF_R = 0.9 // out 解除阈值
+/** @type {{center: [number, number], fam: string, door: DoorInfo} | null} */
+let trackAnchor = null
+let trackCoast = 0
+let lastDoorOut = false
+function resetDoorTrack() {
+    doorTripleBuffer.length = 0
+    trackAnchor = null
+    trackCoast = 0
+    lastDoorOut = false
+}
+/** @param {[number, number]} a @param {[number, number]} b */
+function xyDist(a, b) {
+    return Math.hypot(a[0] - b[0], a[1] - b[1])
+}
+function getBufferedDoor(rawDoor, candidates = []) {
     if (!rawDoor) {
+        if (trackAnchor && trackCoast < COAST_N) {
+            trackCoast++
+            if (config.aimLog) console.log(`[aim #${aimTick} coast] 丢失${trackCoast}帧，沿用 ${trackAnchor.fam}(${~~trackAnchor.center[0]},${~~trackAnchor.center[1]})`)
+            return trackAnchor.door
+        }
         return
     }
+    trackCoast = 0
 
     doorTripleBuffer.push(rawDoor)
     if (doorTripleBuffer.length > 3) doorTripleBuffer.shift()
-    if (doorTripleBuffer.length < 3) return rawDoor
+    if (doorTripleBuffer.length < 3) {
+        lastDoorOut = !!rawDoor.out
+        trackAnchor = { center: rawDoor.match.center, fam: colorFamily(rawDoor.match.color), door: rawDoor }
+        return rawDoor
+    }
 
-    const c0 = doorTripleBuffer[0].match.color
-    const c1 = doorTripleBuffer[1].match.color
-    const c2 = doorTripleBuffer[2].match.color
-    if (c0 !== c1 || c1 !== c2) return
-    return doorTripleBuffer[2]
+    const f0 = colorFamily(doorTripleBuffer[0].match.color)
+    const f1 = colorFamily(doorTripleBuffer[1].match.color)
+    const f2 = colorFamily(doorTripleBuffer[2].match.color)
+    // 颜色切换时乐观跟随最新帧：一次闪烁只偏一 tick，不再换来连续 spin turn(1)
+    const out = f0 === f1 && f1 === f2 ? doorTripleBuffer[2] : rawDoor
+    // out 迟滞平滑（直接改本次输出对象；findColors 给的是原始判定）
+    const rawOut = !!out.out
+    const smoothed = out.normR > OUT_ON_R ? true : out.normR < OUT_OFF_R ? false : lastDoorOut
+    out.out = smoothed
+    lastDoorOut = smoothed
+    if (config.aimLog && smoothed !== rawOut) console.log(`[aim #${aimTick} out-hyst] normR=${out.normR.toFixed(2)} raw=${rawOut} -> ${smoothed}`)
+    // 位置迟滞
+    const of = colorFamily(out.match.color)
+    if (trackAnchor && trackAnchor.fam === of) {
+        if (xyDist(out.match.center, trackAnchor.center) > TRACK_R) {
+            const c = config.viewCenter
+            const still = (candidates || []).find(k => colorFamily(k.color) === trackAnchor.fam && xyDist(k.center, trackAnchor.center) < TRACK_R)
+            if (still && xyDist(trackAnchor.center, c) < xyDist(out.match.center, c) + HYST_BAND) {
+                if (config.aimLog)
+                    console.log(`[aim #${aimTick} hold] 跳变(${~~trackAnchor.center[0]},${~~trackAnchor.center[1]})->(${~~out.match.center[0]},${~~out.match.center[1]})，旧目标仍在，保持`)
+                return still.door
+            }
+        }
+    }
+    trackAnchor = { center: out.match.center, fam: of, door: out }
+    return out
 }
 const gameState = {
     dx: 0,
@@ -129,15 +194,28 @@ function checkSkill(img) {
  * @param {string[]} names 颜色名称数组
  */
 function findColors(img, colors, names, threshold = 10, mode = "single") {
-    // x: 290~1312 y: 168~681
+    // x: 290~1310 y: 169~729（底部放到 729：门徽记常贴底边，514 会把 cap7/cap36 类徽记截断）
     const xOffset = config.mainLoc[0]
     const yOffset = config.mainLoc[1]
     const roi = img.roi(...config.mainLoc)
     const filtered = colorFilter(roi, colors, threshold)
     const closed = morphologyEx(filtered, "close", 4)
-    const contours = findContours(closed, 100).filter(
-        c => c.area < 420 && c.bbox[2] < 28 && c.bbox[3] < 28 && (mode !== "multi" || Math.abs(c.bbox[2] - c.bbox[3]) < 2)
-    )
+    const contours = findContours(closed, 0).filter(c => {
+        // 贴边轮廓可能是被取景框截断的真门徽记（如 cap7 底部红色徽记只剩 11x6，面积 21），面积不可靠；
+        // 贴边用宽松下限 15，内部保持 100 以滤除火把/技能光斑等小噪声（如 cap35 剑光 area=97）。
+        const truncated =
+            c.bbox[0] <= 2 ||
+            c.bbox[1] <= 2 ||
+            c.bbox[0] + c.bbox[2] >= roi.cols() - 2 ||
+            c.bbox[1] + c.bbox[3] >= roi.rows() - 2
+        return (
+            c.area >= (truncated ? 15 : 100) &&
+            c.area < 420 &&
+            c.bbox[2] < 28 &&
+            c.bbox[3] < 28 &&
+            (mode !== "multi" || Math.abs(c.bbox[2] - c.bbox[3]) < 2)
+        )
+    })
     /** @type {{center: [number, number], bbox: [number, number, number, number], color: string, door: Mat}[]} */
     const matches = []
     for (const c of contours) {
@@ -165,33 +243,65 @@ function findColors(img, colors, names, threshold = 10, mode = "single") {
             })
         }
     }
-    for (const color of config.门顺序) {
-        const match = matches.find(v => color === v.color)
-        if (match) {
-            if (config.debug)
-                setStatus(
-                    "door",
-                    matches.map(v => v.door),
-                    `${matches
-                        .map(v => v.color)
-                        .sort()
-                        .join(" ")} -> ${match.color}`
-                )
-            const windowCenter = [xOffset + config.mainLoc[2] / 2, yOffset + config.mainLoc[3] / 2]
-            const dx = match.center[0] - windowCenter[0]
-            const dy = match.center[1] - windowCenter[1]
-            const dyi = (dy * 496) / 239 // 椭圆转圆形
-            const deg = Math.atan2(dy, dx) * (180 / Math.PI)
-            const distance = Math.hypot(dx, dyi)
-            return {
-                match,
-                dx,
-                dy,
-                angle: degTo360(deg + 90),
-                distance,
-                out: distance > 420,
-            }
+    // 寻路几何基准使用视角光心（config.viewCenter），不随 mainLoc 扩大而漂移
+    const windowCenter = [config.viewCenter[0], config.viewCenter[1]]
+    const distOf = v => Math.hypot(v.center[0] - windowCenter[0], dyCorrected(v.center[1] - windowCenter[1]))
+    // 全部候选先算成完整 DoorInfo（供迟滞层在候选之间做“保持/切换”决策时有新鲜量可用）
+    const toInfo = match => {
+        const dx = match.center[0] - windowCenter[0]
+        const dy = match.center[1] - windowCenter[1]
+        const dyi = dyCorrected(dy) // 椭圆转圆形（上下半屏不对称，见 dyCorrected 校准注释）
+        const deg = Math.atan2(dy, dx) * (180 / Math.PI)
+        const distance = Math.hypot(dx, dyi)
+        const normR = distance / OUT_NORM_BASE // 阈值保持 0.95 不动（0.95*442=420，与老 distance>420 等价）
+        const onEdge =
+            match.bbox[0] <= xOffset + 4 ||
+            match.bbox[1] <= yOffset + 4 ||
+            match.bbox[0] + match.bbox[2] >= xOffset + config.mainLoc[2] - 4 ||
+            match.bbox[1] + match.bbox[3] >= yOffset + config.mainLoc[3] - 4
+        return {
+            match,
+            center: match.center,
+            dx,
+            dy,
+            angle: degTo360(deg + 90),
+            distance,
+            // 门投影贴到取景框边或越出取景框 -> 视为超出屏幕，需要小地图+转身引导
+            // 注：这是原始判定；getBufferedDoor 内另做 out 迟滞平滑后再使用
+            out: normR > 0.95 || onEdge,
+            normR,
+            onEdge,
         }
+    }
+    const infos = matches.map(toInfo)
+    // 按门顺序优先级选门；同色多个时取离中心最近的（确定性，避免轮廓顺序抽奖）
+    let picked = undefined
+    for (const color of config.门顺序) {
+        const cands = infos.filter(v => color === v.match.color)
+        if (cands.length > 0) {
+            picked = cands.map(v => ({ v, d: distOf(v) })).sort((a, b) => a.d - b.d)[0].v
+            break
+        }
+    }
+    if (!picked && infos.length > 0) {
+        // 兜底：取景框里明明有门，但颜色都不在门顺序里时（如 cap1 休整场景只有小红徽记，
+        // 而门顺序未勾选小红），退化为选择距离取景框中心最近的一个，而不能返回空。
+        // 否则主视角有门却判定无门，原地 turn(1) 打转，表现为“找不到门”。
+        picked = infos.map(v => ({ v, d: distOf(v) })).sort((a, b) => a.d - b.d)[0].v
+    }
+    if (picked) {
+        const match = picked.match
+        if (config.debug)
+            setStatus(
+                "door",
+                matches.map(v => v.door),
+                `${matches
+                    .map(v => v.color)
+                    .sort()
+                    .join(" ")} -> ${match.color}${config.门顺序.includes(match.color) ? "" : " (兜底)"}`
+            )
+        picked.candidates = infos.map(v => ({ center: v.match.center, color: v.match.color, door: v }))
+        return picked
     }
 }
 /**
@@ -214,6 +324,78 @@ function findYellow(img) {
 /** @param {number} deg */
 function degTo360(deg) {
     return (deg + 360) % 360
+}
+
+/**
+ * 角度差归一化到 [-180, 180]
+ * JS 的 % 对负数会保留符号，直接 ((a-b+180)%360)-180 在差值为负时会得到 -180~-360 的错误结果
+ * @param {number} from 当前朝向
+ * @param {number} to 目标朝向
+ */
+function angleDelta(from, to) {
+    return (((from - to + 540) % 360 + 360) % 360) - 180
+}
+
+/** 小地图转身的距离门禁：非常近的不作为转身依据，防止误判 */
+const MINIMAP_TURN_MIN_DIST = 15
+
+/** out 归一化基数：0.95*442=420，与老 distance>420 等价，阈值本身不动 */
+const OUT_NORM_BASE = 442
+/** 椭圆矫正分母（上下半屏共用） */
+const ELLIPSE_DEN = 239
+/** 上半屏椭圆矫正分子（保持原值） */
+const ELLIPSE_TOP_NUM = 496
+/**
+ * 下半屏椭圆矫正分子（对照 imgs/cap*.png 校准，阈值保持 0.95 不动）。
+ * 下边缘目标纵向压缩更严重：cap18 大红 dx=-120 dy=212，用原 496 算 distance=456
+ * （normR=1.03）看似刚过线，但 dy 稍小一点（如 dy=180 → 393）就会漏判；
+ * 而中央底部目标 cap19 小红 dx=-184 dy=120（distance=309）必须保持非 out。
+ * 取 570 使 cap18 → 520（out）、cap19 → 340（非 out），上下分开标定。
+ * @param {number} dy 相对取景框中心的纵向偏移（>0 为下半屏）
+ */
+function dyCorrected(dy) {
+    return dy >= 0 ? (dy * 570) / ELLIPSE_DEN : (dy * ELLIPSE_TOP_NUM) / ELLIPSE_DEN
+}
+
+/**
+ * 主视角找不到门时，用左下角小地图上的门标记雷达强制转身寻门。
+ * 门在身后时主视角完全看不到，只能靠这里转身（cap35/36/37）。
+ * 若小地图同时有多个标记，优先与「优先级最高且最近3帧一致」的目标颜色一致的那个。
+ * @param {Mat} img 窗口截图
+ * @param {string} [preferColor] 期望匹配的颜色（如事件阶段期望 "黄"），省略则用雷达自身优先级
+ * @returns {{turned: boolean, angle?: number, distance?: number}} 是否已旋转
+ */
+function aimAtMinimap(img, preferColor, minDist = MINIMAP_TURN_MIN_DIST) {
+    if (isFlying) return { turned: false } // 飞行中禁止转身
+    const mDoor = findDoorMinimap(img)
+    if (!mDoor) return { turned: false }
+    if (preferColor && colorFamily(mDoor.match.color) !== preferColor) {
+        // 事件阶段期望黄点，但雷达只有红/蓝门标记 -> 不可用于黄点转身
+        return { turned: false }
+    }
+    if (!(mDoor.distance > minDist)) {
+        // 太近的小地图标记不可靠（常为自身箭头/噪声），按距离门禁过滤
+        return { turned: false }
+    }
+    const roiMat = img.roi(30, 35, 180, 180)
+    let rotation = mDoor.angle
+    try {
+        rotation = predictRotation(roiMat)
+    } catch (_e) {
+        rotation = mDoor.angle
+    }
+    const delta = angleDelta(rotation, mDoor.angle)
+    if (Math.abs(delta) > 30) {
+        turn(-Math.sign(delta) * Math.max(Math.abs(delta), 1))
+        setStatus("route", frame.roi(...mDoor.match.bbox), `转身寻门: ${mDoor.match.color} ${~~mDoor.angle}° delta=${~~delta}`)
+        return { turned: true, angle: mDoor.angle, distance: mDoor.distance }
+    }
+    return { turned: false, angle: mDoor.angle, distance: mDoor.distance }
+}
+
+/** 颜色分类 @param {string} c */
+function colorFamily(c) {
+    return c === "大红" || c === "小红" ? "红" : c
 }
 
 /**
@@ -483,6 +665,7 @@ function checkMap(frame) {
         switch (points) {
             case "00101000010":
             case "00101110010":
+            case "00001110010":
                 return "dash"
             case "01110000010":
             case "11111000010":
@@ -519,6 +702,15 @@ function turn(angle) {
 }
 
 /**
+ * 鼠标中键复位视角。
+ * 落地后若残留俯仰偏移，可能导致「非正下方的门」被误判为 out，进而反复转向。
+ * 在每次落地后调用一次，把摄像机角度复位到水平，避免无限转圈。
+ */
+function resetView() {
+    mc(hwnd, "middle")
+}
+
+/**
  * 转视角到绝对角度
  * @param {number} angle 角度
  * @param {Mat} [frame] 窗口截图
@@ -527,7 +719,7 @@ async function turnAbs(angle, frame) {
     if (!frame) frame = cap13()
     const roiMat = frame.roi(30, 35, 180, 180)
     const rotation = predictRotation(roiMat)
-    const delta = ((rotation - angle + 180) % 360) - 180
+    const delta = angleDelta(rotation, angle)
     if (rotation === angle) return
     turn(-Math.sign(delta) * Math.max(Math.abs(delta), 1))
 }
@@ -541,6 +733,7 @@ async function fastMove(angle, distance) {
     setStatus("fn", "fastMove")
     if (angle !== undefined) await turnAbs(angle)
     if (distance === undefined || distance > 15) {
+        isFlying = true
         await rollAbs(-50)
         await sleep(33)
         await kb(hwnd, "4", 33)
@@ -549,6 +742,8 @@ async function fastMove(angle, distance) {
         await sleep(300)
         mt(hwnd)
         mc(hwnd) // 下落攻击
+        resetView() // 落地复位视角，避免残留俯仰导致 out 误判
+        isFlying = false
     } else {
         kd(hwnd, "w")
         await sleep(33)
@@ -604,6 +799,11 @@ const autoAimModel = (() => {
 function clamp(v, min, max) {
     return Math.max(min, Math.min(max, v))
 }
+// 跟踪阻尼：实测跟踪指令长期顶在 ±320 钳制位（饱和抡镜 → 画面涂抹 → 检测乱跳 → 更猛地抡，正反馈）。
+// 增益 0.6：即使标定偏热 40%（hFov 不准等）仍然无超调，只慢 2~3 tick 收敛；
+// 钳制 120（≈25°/tick）：跟踪足够快；真·掉头（mini-turn/turnAbs）走各自通道不受影响。
+const AIM_GAIN = 0.6
+const AIM_MAX = 120
 
 /**
  * 屏幕投影偏移 -> 摄像机角度 -> mm参数
@@ -615,9 +815,9 @@ function projectOffsetToMm(dx, dy, opts = {}) {
     let yawDeg = (Math.atan(dx / autoAimModel.fx) * 180) / Math.PI
     const pitchDeg = (Math.atan(dy / autoAimModel.fy) * 180) / Math.PI
     if (opts.out && opts.rawDy) {
-        // 边缘点会被压在椭圆上，使用 dx + 椭圆修正后的 dy 计算平面方向角。
+        // 边缘点会被压在椭圆上，使用 dx + 椭圆修正后的 dy 计算平面方向角（与 out 共用 dyCorrected）。
         const rawDy = Number.isFinite(opts.rawDy) ? opts.rawDy : dy
-        const dyi = (rawDy * 496) / 239
+        const dyi = dyCorrected(rawDy)
         yawDeg = (Math.atan2(dx, -dyi) * 180) / Math.PI
     }
     return {
@@ -738,10 +938,10 @@ async function moveLoop(type = "door") {
             }
             break
         case "bossfang":
-            turn(-15)
+            turn(-12)
             await fastMove()
             await sleep(700)
-            turn(-15)
+            turn(-8)
             await fastMove()
             await sleep(700)
             break
@@ -749,6 +949,9 @@ async function moveLoop(type = "door") {
     const totalTimeout = new Timer()
     let state = gameState.state
     let lastd = 0
+    // 起飞去抖：OCR 偶发误读（如贴脸时读出 79/191 米）不能直接起飞，否则一头飞过近在咫尺的门；
+    // 远判定必须连续两次 loop 都成立才飞（真远门不受影响，误读只会出现一瞬间）。
+    let farSeen = 0
     const notMoved = new Timer()
     const shiftcd = new Timer()
     while (checkStop() && (state === "event" || state === "door")) {
@@ -761,9 +964,13 @@ async function moveLoop(type = "door") {
         }
         autoAimX = true
         await sleep(100)
-        // 远距离移动
-        if (gameState.distance > 20 || (gameState.distance > 10 && gameState.dy < -30) || gameState.dy < -220) {
+        // 远距离移动（去抖：连续两次判定为远才起飞，第一次先走过去等确认）
+        const wantFly = gameState.distance > 20 || (gameState.distance > 10 && gameState.dy < -30) || gameState.dy < -220
+        if (wantFly) farSeen++
+        else farSeen = 0
+        if (wantFly && farSeen >= 2) {
             autoAimX = false
+            isFlying = true // 起飞：ftimer 内的小地图转身/X aim 全部暂停，落地再恢复
             const yew = gameState.distance > 29 ? -45 : gameState.distance > 20 ? -25 : -12
             // if (config.debug) console.log(`远距离移动: d=${gameState.distance} yew=${yew}`)
             await rollAbs(yew)
@@ -774,15 +981,25 @@ async function moveLoop(type = "door") {
             await waitF(300)
             autoAimY = false
             mt(hwnd)
-            if (await checkFinish()) return
+            if (await checkFinish()) {
+                isFlying = false
+                return
+            }
             await sleep(33)
             mc(hwnd)
             await sleep(33)
             mc(hwnd)
-            if (await checkFinish(500)) return
+            resetView() // 落地复位视角
+            if (await checkFinish(500)) {
+                isFlying = false
+                return
+            }
+            isFlying = false
             autoAimX = true
+            farSeen = 1 // 飞完保持“已见远一次”，真远门下一次判定直接续飞，不用重新走一轮
             notMoved.reset()
         } else {
+            resetView() // 正常走路时回正一次，保持视野水平，防止抬头残留导致 out 误判原地转圈
             kd(hwnd, "w")
             await waitF(200)
             if (gameState.distance >= 7 && shiftcd.elapsed() > 2e3) {
@@ -1012,9 +1229,23 @@ function checkF() {
 
 /** @param {*} door */
 function ocrDistance(door, md = 0) {
-    const numroi = frame.roi(door.match.bbox[0] - 4, door.match.bbox[1] + door.match.bbox[3] + 5, 32, 15)
-    let d = +numocr(numroi)
-    if (d >= 100) d = ~~(d / 10)
+    // 徽记贴近屏幕边缘时，下方数字区域可能越界：直接 roi 会抛异常并杀死整 tick 的瞄准，
+    // 门明明在视野内却永远不转向（表现为“找不到门”），先钳制到画面内，失败则用 md 兜底。
+    const x = Math.max(0, door.match.bbox[0] - 4)
+    const y = Math.max(0, door.match.bbox[1] + door.match.bbox[3] + 5)
+    const w = Math.min(32, frame.cols() - x)
+    const h = Math.min(15, frame.rows() - y)
+    let d = NaN
+    if (w > 0 && h > 0) {
+        try {
+            const raw = numocr(frame.roi(x, y, w, h))
+            // 四位数以上不可能是门距（如误读 "1912"），按识别失败处理走 md 兜底
+            d = raw.length > 3 ? NaN : +raw
+            if (d >= 100) d = ~~(d / 10)
+        } catch (_e) {
+            d = NaN
+        }
+    }
     gameState.distance = Number.isFinite(d) ? d : md
     setStatus("route", `寻路${autoAimX ? "X" : ""}${autoAimY ? "Y" : ""}: ${~~door.dx}, ${~~door.dy}, ${gameState.distance}m`)
 }
@@ -1048,16 +1279,49 @@ async function main() {
         if (autoAimX || autoAimY) {
             if (bufferedFindFn !== findFn) {
                 bufferedFindFn = findFn
-                doorTripleBuffer.length = 0
+                resetDoorTrack()
             }
             const rawDoor = findFn(frame)
-            const door = config.useTripleDoorBuffer ? getBufferedDoor(rawDoor) : rawDoor
+            const door = config.useTripleDoorBuffer ? getBufferedDoor(rawDoor, rawDoor ? rawDoor.candidates : undefined) : rawDoor
+            let md = 0
+            // ---- aim观测（只记录不干预） ----
+            aimTick++
+            const aimInfo = {
+                fn: findFn === findYellow ? "yellow" : "door",
+                raw: rawDoor || null,
+                door: door || null,
+                yaw: null,
+                pitch: null,
+                rawMm: null,
+                fastX: null,
+                fastY: null,
+                mini: "none",
+            }
+            const aimSnap = tag => {
+                if (config.aimLog) {
+                    const r = aimInfo.raw,
+                        d = aimInfo.door
+                    console.log(
+                        `[aim #${aimTick} ${tag}] state=${gameState.state} fn=${aimInfo.fn} fly=${isFlying} ax=${autoAimX} ay=${autoAimY} ` +
+                            `raw=${r ? `${r.match.color}(${~~r.dx},${~~r.dy})` : "none"} buf=${d ? `${d.match.color}(${~~d.dx},${~~d.dy})out=${d.out}normR=${d.normR.toFixed(2)}` : "none"} ` +
+                            `dist=${gameState.distance} yaw=${aimInfo.yaw ?? "-"} pitch=${aimInfo.pitch ?? "-"} fast=(${aimInfo.fastX ?? "-"},${aimInfo.fastY ?? "-"}) rawmm=(${aimInfo.rawMm ?? "-"}) mini=${aimInfo.mini}`
+                    )
+                }
+                if (config.aimShot && config.aimShotGap > 0 && aimTick % config.aimShotGap === 0 && aimShotN < AIM_SHOT_MAX) {
+                    aimShotN++
+                    try {
+                        imwrite(`imgs/aim_${("0000" + aimShotN).slice(-4)}.png`, frame)
+                    } catch (_e) {
+                        // 截图失败不影响tick
+                    }
+                    if (aimShotN >= AIM_SHOT_MAX && config.aimLog) console.log(`[aim] 截图已达上限${AIM_SHOT_MAX}张，停止截图`)
+                }
+            }
             if (door) {
-                let md = 0
                 if (config.debug) drawBorder(hwnd, ...door.match.bbox)
                 if (door.out) {
                     const mDoor = findDoorMinimap(frame)
-                    if (mDoor && mDoor.match.color === door.match.color && mDoor.distance > 15) {
+                    if (mDoor && colorFamily(mDoor.match.color) === colorFamily(door.match.color) && mDoor.distance > MINIMAP_TURN_MIN_DIST) {
                         setStatus(
                             "route",
                             frame.roi(...mDoor.match.bbox),
@@ -1065,31 +1329,59 @@ async function main() {
                         )
                         const roiMat = frame.roi(30, 35, 180, 180)
                         const rotation = predictRotation(roiMat)
-                        const delta = ((rotation - mDoor.angle + 180) % 360) - 180
-                        if (delta > 30) {
+                        const delta = angleDelta(rotation, mDoor.angle)
+                        if (!isFlying && Math.abs(delta) > 30) {
                             turn(-Math.sign(delta) * Math.max(Math.abs(delta), 1))
+                            aimInfo.mini = `rot=${~~rotation} delta=${~~delta} TURN`
+                            aimSnap("mini-turn")
                             // console.log("mm旋转", delta)
                             return
                         }
                         gameState.angle = mDoor.angle
                         md = gameState.distance = mDoor.distance
+                        aimInfo.mini = `rot=${~~rotation} delta=${~~delta} md=${~~md}`
                     }
                 }
                 ocrDistance(door, md)
                 const first = projectOffsetToMm(door.dx, door.dy + autoAimoffsetY, { out: door.out, rawDy: door.dy })
-                let fastX = clamp(first.mmx, -320, 320)
-                let fastY = clamp(first.mmy, -320, 320)
+                let fastX = clamp(Math.round(first.mmx * AIM_GAIN), -AIM_MAX, AIM_MAX)
+                let fastY = clamp(Math.round(first.mmy * AIM_GAIN), -AIM_MAX, AIM_MAX)
                 if (Math.abs(fastX) < 5) fastX = 0
                 if (Math.abs(fastY) < 5) fastY = 0
                 gameState.dx = first.mmx
                 gameState.dy = first.mmy
-                mm(autoAimX ? fastX : 0, autoAimY || door.out ? fastY : 0)
+                mm(autoAimX && !isFlying ? fastX : 0, autoAimY || door.out ? fastY : 0)
+                aimInfo.yaw = +first.yawDeg.toFixed(1)
+                aimInfo.pitch = +first.pitchDeg.toFixed(1)
+                aimInfo.rawMm = `${first.mmx},${first.mmy}`
+                aimInfo.fastX = autoAimX && !isFlying ? fastX : 0
+                aimInfo.fastY = autoAimY || door.out ? fastY : 0
+                aimSnap("aim")
             } else {
-                gameState.distance = 0
-                turn(1)
+                if (autoAimX && !isFlying) {
+                    const aim = aimAtMinimap(frame, bufferedFindFn === findYellow ? "黄" : undefined)
+                    if (aim.turned) {
+                        aimInfo.mini = "search-TURN"
+                        aimSnap("mini-search-turn")
+                        return
+                    }
+                    if (aim.angle !== undefined) {
+                        gameState.angle = aim.angle
+                        gameState.distance = aim.distance ?? 0
+                    } else {
+                        gameState.distance = 0
+                        turn(1)
+                    }
+                    aimInfo.mini = aim.angle !== undefined ? `angle=${~~aim.angle} dist=${~~(aim.distance ?? 0)}` : "spin turn(1)"
+                    aimSnap("search")
+                } else {
+                    gameState.distance = 0
+                    aimInfo.mini = "fly-blind"
+                    aimSnap("fly-blind")
+                }
             }
         } else {
-            doorTripleBuffer.length = 0
+            resetDoorTrack()
             setStatus("route")
         }
     }, config.ftime)
@@ -1146,6 +1438,9 @@ async function main() {
                     timer.reset()
                     console.info(`完成 ${++finished}次 用时 ${~~(secs / 60)}分${~~(secs % 60)}秒`)
                 }
+                await moveTo(hwnd, 200, 1 + yof, 100)
+                rmc(1456, 808)
+                await sleep(500)
                 rmc(1456, 808)
                 await sleep(1500)
                 break

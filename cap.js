@@ -5,7 +5,7 @@
 // @author pa
 // @version 1.3.0
 // @category 开发工具
-// @date 2026/10/05 09:44
+// @date 2026/10/25 00:03
 // ==/UserScript==
 const hwnd = getWindowByProcessName("EM-Win64-Shipping.exe")
 if (!hwnd) throw new Error("未找到窗口")

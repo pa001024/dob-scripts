@@ -5,7 +5,7 @@
 // @author pa
 // @version 1.0.0
 // @category 其他
-// @date 2026/09/28 14:20
+// @date 2026/10/30 13:27
 // ==/UserScript==
 
 import { Cap } from "cap"
@@ -207,15 +207,23 @@ function updateState() {
 async function startBattle() {
     while (true) {
         updateState()
-        if (state === "unknown") c.mc(1221, 846) // 重试
-        if (state !== "battle" && state !== "unknown") break
-        if (config.mode === "艾达" && cc(frame, 1428, 803, 0xE9E9E9, 10)) {
-            setStatus("q", "1")
-            await c.play("q2")
-            setStatus("q")
+        if (state === "unknown") {
+            await sleep(1e3)
+            updateState()
+            if (state === "unknown") {
+                c.mc(1221, 846) // 重试
+            }
         }
-        if (config.mode === "艾达") await c.play("w0 e0.2 w^ #0.3 s0 e0.2 s^ M #0.5 R0.1 #0.5 z")
-        if (config.mode === "芙罗拉") {
+        if (state !== "battle" && state !== "unknown") break
+        if (config.mode === "艾达") {
+            if (cc(c.frame, 1428, 803, 0xe9e9e9, 10)) {
+                setStatus("q", "1")
+                await c.play("q2")
+                setStatus("q")
+            }
+            await c.play("w0 e0.2 w^ #0.3 s0 e0.2 s^ M #0.5 R0.1 #0.5 z")
+        }
+        if (config.mode == "芙罗拉") {
             if (cc(c.frame, 1443, 803, 0xe9e9e9, 40)) await c.play("q2")
             await c.play("s0M e0.1#0.2L1 s")
         }

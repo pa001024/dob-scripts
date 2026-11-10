@@ -5,7 +5,7 @@
 // @author pa
 // @version 1.2.0
 // @category 活动
-// @date 2026/10/12 08:52
+// @date 2026/11/10 10:31
 // ==/UserScript==
 
 import { Cap } from "cap"
@@ -20,9 +20,17 @@ const g = {
     ehp: 0,
     php: 0,
     stage: 0,
-    debug: false,
+    debug: readConfig("debug", "调试", "boolean", false),
     t: 0, // 双血条最后一次成功采样的时刻，后台 interval 维护
 }
+
+// ===== debug 开关(默认关闭，可在脚本配置页勾选开启) =====
+// 开启后才打印 debug 日志 + 高频 setStatus(state/php/ehp/verify)，避免刷屏
+// 低频 status(rooms/stage/finish) 不受影响，始终上报
+/** @param {...any} a */
+function dlog(...a) { if (g.debug) console.debug(...a) }
+/** @param {string} k @param {...any} a */
+function dstatus(k, ...a) { if (g.debug) setStatus(k, ...a) }
 
 // ===== 选房(舞台大厅)：剩余进度 OCR ====
 // 基于 imgs/cap129.png 标定(1600x900 客户区)：
@@ -46,23 +54,49 @@ function isFullRoomText(t) {
     return false
 }
 
-/** OCR 5 行剩余进度，随机返回一个 100% 房下标，无则返回 -1
+/** OCR 5 行剩余进度，返回每行文本(失败行为"")
  * @param {Mat} frame
+ * @returns {Promise<string[]>}
  */
-async function pickFullRoom(frame) {
-    const full = []
+async function ocrRoomRows(frame) {
+    const texts = []
     for (let i = 0; i < ROOM_ROWS.length; i++) {
         const [x, y, w, h] = ROOM_ROWS[i].ocr
         try {
             const roi = frame.roi(x, y, w, h)
             const big = roi.resize(w * 2, h * 2, "cubic")
             const t = await ocrText(big)
-            console.debug(`选房OCR[${i}]: ${JSON.stringify(t)}`)
+            dlog(`选房OCR[${i}]: ${JSON.stringify(t)}`)
             if (g.debug) setStatus("room" + i, big, String(t || ""))
-            if (isFullRoomText(t)) full.push(i)
+            texts.push(String(t || ""))
         } catch (e) {
-            console.debug(`选房OCR[${i}]失败: ${e instanceof Error ? e.message : e}`)
+            dlog(`选房OCR[${i}]失败: ${e instanceof Error ? e.message : e}`)
+            texts.push("")
         }
+    }
+    return texts
+}
+
+/** 从5行文本中选100%房下标，无则返回 -1
+ * @param {string[]} texts
+ */
+function chooseFullRoom(texts) {
+    const full = []
+    for (let i = 0; i < texts.length; i++) {
+        if (isFullRoomText(texts[i])) full.push(i)
+    }
+    if (!full.length) return -1
+    return full[(Math.random() * full.length) | 0]
+}
+
+/** OCR 5 行剩余进度，随机返回一个 100% 房下标，无则返回 -1
+ * @param {Mat} frame
+ */
+async function pickFullRoom(frame) {
+    const texts = await ocrRoomRows(frame)
+    const full = []
+    for (let i = 0; i < texts.length; i++) {
+        if (isFullRoomText(texts[i])) full.push(i)
     }
     setStatus("rooms", full.length ? `100%房: ${full.join(",")}` : "无100%房")
     if (!full.length) return -1
@@ -86,6 +120,10 @@ const CFG = {
     eAsyncMinAge: 400, // 节律E无阻塞验证：pendingE最小评估年龄(正常一轮循环约1s，天然满足)
     phpCap: 95, // php高于该值视为满血：涨无可涨，验证只看怪掉不掉血
     ehpFloor: 3, // ehp低于该值视为怪将死：不做验证，避免收尾阶段误追
+    roomScrollMax: 8, // 选房：单轮无100%时最多向下滚动次数，找遍当前列表
+    roomScrollWheel: -360, // 选房：每次滚动量(负数向下)
+    roomScrollDelayMs: 700, // 选房：滚后等待列表稳定再OCR
+    roomRefreshMax: 3, // 选房：连续刷新仍无100%则兜底随便进一间，防止死循环
 }
 
 /** @param {Mat} frame  */
@@ -183,7 +221,7 @@ async function main() {
     }
     setInterval(async () => {
         g.state = checkState(c.cap())
-        setStatus("state", g.state)
+        dstatus("state", g.state)
         if (g.state.startsWith("battle")) {
             const r = readBarsSync()
             // 找不到血条时保持旧值，避免 0/100 跳变污染趋势判断
@@ -192,8 +230,8 @@ async function main() {
                 g.php = r.php
                 g.t = Date.now()
             }
-            setStatus("php", g.php)
-            setStatus("ehp", g.ehp)
+            dstatus("php", g.php)
+            dstatus("ehp", g.ehp)
         }
     }, 100)
 
@@ -221,8 +259,8 @@ async function main() {
         g.ehp = after.ehp
         const dPhp = after.php - before.php
         const dEhp = after.ehp - before.ehp
-        setStatus("verify", `dPhp=${dPhp.toFixed(2)} dEhp=${dEhp.toFixed(2)}`)
-        console.debug(`E验证 dPhp=${dPhp.toFixed(2)} dEhp=${dEhp.toFixed(2)}`)
+        dstatus("verify", `dPhp=${dPhp.toFixed(2)} dEhp=${dEhp.toFixed(2)}`)
+        dlog(`E验证 dPhp=${dPhp.toFixed(2)} dEhp=${dEhp.toFixed(2)}`)
         return classifyE(before, after)
     }
 
@@ -246,13 +284,13 @@ async function main() {
     const chaseTarget = async () => {
         qcd.reset()
         chaseCd.reset()
-        console.debug("E验证失败/目标丢失：M锁定跳追+补Q")
+        dlog("E验证失败/目标丢失：M锁定跳追+补Q")
         await c.play("M#0.1 _#0.3_#0.3L +3(q#0.3)#0.8 L")
     }
     // 有伤害无回血：Q 标记掉了，轻量补 Q + 左键，不跳追
     const remarkTarget = async () => {
         qcd.reset()
-        console.debug("有伤害无回血：补Q重挂标记")
+        dlog("有伤害无回血：补Q重挂标记")
         await c.play("+3(q0.1#0.3e0.1) L #0.2")
     }
 
@@ -272,13 +310,13 @@ async function main() {
     const handleEVerict = async (res, src) => {
         if (!res) return false
         if (res === "ok") {
-            console.debug(`E验证通过(${src})：回上血且怪掉血`)
+            dlog(`E验证通过(${src})：回上血且怪掉血`)
             eFailStreak = 0
             atkFailStreak = 0
             return false
         }
         if (res === "stage") {
-            console.debug(`E窗口内转阶段/怪回血(${src})，跳过补Q`)
+            dlog(`E窗口内转阶段/怪回血(${src})，跳过补Q`)
             eFailStreak = 0
             atkFailStreak = 0
             if (chaseCd.elapsed() > CFG.chaseMinGap && qcd.elapsed() > CFG.qMinGap) {
@@ -291,7 +329,7 @@ async function main() {
         }
         if (res === "needQ") {
             eFailStreak++
-            console.debug(`E验证:有伤害无回血(${src} ${eFailStreak}/${CFG.eFailNeed})`)
+            dlog(`E验证:有伤害无回血(${src} ${eFailStreak}/${CFG.eFailNeed})`)
             if (eFailStreak >= CFG.eFailNeed && qcd.elapsed() > CFG.qMinGap) {
                 await remarkTarget()
                 eFailStreak = 0
@@ -301,9 +339,9 @@ async function main() {
         // lost / lostHard
         const hard = res === "lostHard"
         eFailStreak++
-        console.debug(`E验证:目标丢失(${src} ${eFailStreak}/${CFG.eFailNeed})${hard ? "[静止]" : ""}`)
+        dlog(`E验证:目标丢失(${src} ${eFailStreak}/${CFG.eFailNeed})${hard ? "[静止]" : ""}`)
         if (eFailStreak >= CFG.eForceNeed) {
-            console.debug(`!!! E验证连续失败${eFailStreak}次，强制追怪`)
+            dlog(`!!! E验证连续失败${eFailStreak}次，强制追怪`)
             await chaseTarget()
             eFailStreak = 0
             atkFailStreak = 0
@@ -320,12 +358,13 @@ async function main() {
             return true
         }
         if (hard || eFailStreak >= CFG.eFailNeed) {
-            console.debug(`追踪被冷却拦住 qcd=${(qcd.elapsed() / 1000).toFixed(1)}s chaseCd=${(chaseCd.elapsed() / 1000).toFixed(1)}s`)
+            dlog(`追踪被冷却拦住 qcd=${(qcd.elapsed() / 1000).toFixed(1)}s chaseCd=${(chaseCd.elapsed() / 1000).toFixed(1)}s`)
         }
         return false
     }
 
     const timer = new Timer()
+    let noFullStreak = 0 // 选房：连续“滚到底仍无100%”的 enter 轮数，超限则兜底进房防死循环
     while (true) {
         switch (g.state) {
             case "battle":
@@ -340,7 +379,7 @@ async function main() {
                     if (s > g.stage && timer.elapsed() > 2e3) {
                         qcd.reset()
                         timer.reset()
-                        console.debug("切换stage 执行QE")
+                        dlog("切换stage 执行QE")
                         await c.play("M#0.1 +3(q0.1#0.3) +2(e0.2)  #0.3e") // 追BOSS
                     }
                     g.stage = s
@@ -368,13 +407,13 @@ async function main() {
                     const dEhp = g.ehp - atkEhpRef
                     if (dEhp > CFG.stageHealJump) {
                         // 怪大幅回血=转阶段/OCR漏检的stage切换：不是没打中，不计失败，刷新基准并补一次转阶段追击
-                        console.debug(`疑似转阶段/怪回血 dEhp=+${dEhp.toFixed(2)}，跳过无掉血判定`)
+                        dlog(`疑似转阶段/怪回血 dEhp=+${dEhp.toFixed(2)}，跳过无掉血判定`)
                         atkFailStreak = 0
                         eFailStreak = 0
                         atkEhpRef = g.ehp
                         atkTRef = now
                         if (chaseCd.elapsed() > CFG.chaseMinGap && qcd.elapsed() > CFG.qMinGap) {
-                            console.debug("转阶段补偿追击(OCR未识别到)")
+                            dlog("转阶段补偿追击(OCR未识别到)")
                             await chaseTarget()
                             atkEhpRef = g.ehp
                             atkTRef = Date.now()
@@ -383,9 +422,9 @@ async function main() {
                     } else if (dEhp > -CFG.ehpDownNeed) {
                         // 单窗口没掉血只记数，连续空窗口才追踪；追踪走长冷却chaseCd
                         atkFailStreak++
-                        console.debug(`攻击掉血不足 dEhp=${dEhp.toFixed(2)} (${atkFailStreak}/${CFG.atkFailNeed})`)
+                        dlog(`攻击掉血不足 dEhp=${dEhp.toFixed(2)} (${atkFailStreak}/${CFG.atkFailNeed})`)
                         if (atkFailStreak >= CFG.atkFailNeed && chaseCd.elapsed() > CFG.chaseMinGap && qcd.elapsed() > CFG.qMinGap) {
-                            console.debug(`攻击连续无掉血，执行追踪`)
+                            dlog(`攻击连续无掉血，执行追踪`)
                             await chaseTarget()
                             atkFailStreak = 0
                             atkEhpRef = g.ehp
@@ -404,7 +443,7 @@ async function main() {
                     // 打不到怪时不按验证E：E回血依赖命中，此时按E只是原地罚站，还会拖住跳追。
                     // 跳过后落到底部普攻串(老节奏自带e)，由攻击检测攒失败直接追怪
                     if (atkFailStreak >= 1) {
-                        console.debug("低血量但近期无伤害，跳过E直接追怪")
+                        dlog("低血量但近期无伤害，跳过E直接追怪")
                         eFailStreak++
                         if (eFailStreak >= CFG.eFailNeed && chaseCd.elapsed() > CFG.chaseMinGap && qcd.elapsed() > CFG.qMinGap) {
                             await chaseTarget()
@@ -418,10 +457,10 @@ async function main() {
                     ecd.reset()
                     const before = readBarsSync()
                     if (!before.ok) {
-                        console.debug("读不到血条，跳过本次E验证")
+                        dlog("读不到血条，跳过本次E验证")
                         break
                     }
-                    console.debug("低血量 执行E")
+                    dlog("低血量 执行E")
                     await c.play("M +2(e0.05#0.05)")
                     const res = await verifyE(before)
                     await handleEVerict(res, "低血")
@@ -459,19 +498,61 @@ async function main() {
                 // 可选排序：按剩余进度排(保留原1512,191逻辑)，让100%靠前，失败也不影响OCR随机
                 await c.play("L(1512,191)#0.5")
                 // OCR 5行剩余进度，优先随机选100%房，避免固定点第一间踩到非100%
+                // 无100%则向下滚动继续找，直到找到 / 滚到底 / 达到滚动上限
                 let idx = -1
                 try {
                     idx = await pickFullRoom(c.cap())
+                    if (idx < 0) {
+                        let prevKey = ""
+                        let staleRounds = 0
+                        for (let sc = 0; sc < CFG.roomScrollMax && idx < 0; sc++) {
+                            wheel(c.hwnd, 800, 450, CFG.roomScrollWheel)
+                            await sleep(CFG.roomScrollDelayMs)
+                            let texts = []
+                            try {
+                                texts = await ocrRoomRows(c.cap())
+                            } catch (e) {
+                                dlog(`选房滚屏OCR异常: ${e instanceof Error ? e.message : e}`)
+                                continue
+                            }
+                            idx = chooseFullRoom(texts)
+                            const key = texts.join("|")
+                            setStatus("rooms", idx >= 0 ? `100%房(滚${sc + 1}): ${idx}` : `无100%房(滚${sc + 1})`)
+                            if (idx >= 0) break
+                            // 到底判断：连续两轮5行文本完全不变，说明滚不动了
+                            if (key === prevKey) {
+                                staleRounds++
+                                if (staleRounds >= 2) {
+                                    dlog("选房: 滚到底(列表无变化)，停止滚动")
+                                    break
+                                }
+                            } else {
+                                staleRounds = 0
+                                prevKey = key
+                            }
+                        }
+                    }
                 } catch (e) {
-                    console.debug(`选房OCR异常走兜底: ${e instanceof Error ? e.message : e}`)
+                    dlog(`选房OCR异常走兜底: ${e instanceof Error ? e.message : e}`)
                 }
                 if (idx < 0) {
-                    console.debug("选房: 无100%房，刷新重试")
+                    noFullStreak++
+                    // 防死循环：连续多轮滚到底+刷新仍无100%，兜底随便进一间(第1行)，不再无限刷新
+                    if (noFullStreak > CFG.roomRefreshMax) {
+                        dlog(`选房: 连续${noFullStreak}轮无100%房，兜底进第1间防卡死`)
+                        noFullStreak = 0
+                        const [fx, fy] = ROOM_ROWS[0].click
+                        await c.play(`L(${fx},${fy})#0.5 L(1190,775)#0.5`)
+                        fi = true
+                        break
+                    }
+                    dlog(`选房: 无100%房(已滚到底 ${noFullStreak}/${CFG.roomRefreshMax})，刷新重试`)
                     await c.play("L(1190,775)#0.5") // 无弹窗时命中刷新按钮，有弹窗时命中确认，复用原坐标
                     break
                 }
+                noFullStreak = 0
                 const [cx, cy] = ROOM_ROWS[idx].click
-                console.debug(`选房: 100%房[${idx}] L(${cx},${cy})`)
+                dlog(`选房: 100%房[${idx}] L(${cx},${cy})`)
                 await c.play(`L(${cx},${cy})#0.5 L(1190,775)#0.5`)
                 fi = true
                 break
@@ -485,6 +566,7 @@ async function main() {
             case "unknown":
                 await sleep(1000)
                 if (g.state === "unknown") c.mc(839, 742)
+                if (cc(c.frame,1307,233,0xDDD7D1,10)) c.mc(1307, 233)
                 break
         }
         await sleep(100)

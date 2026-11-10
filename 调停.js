@@ -48,7 +48,7 @@ async function main() {
         switch (state) {
             case "r":
                 console.log(`完成 ${++count} 次`)
-                await c.play("r#0.3{space}#0.3{space}#0.3")
+                await c.play("r#0.3{space}#0.3{space}#2")
                 moved = false
                 break
             case "move":
@@ -56,7 +56,7 @@ async function main() {
                     await exitAction()
                     break
                 }
-                await c.play("#1.5 +2(L0.3#0.3) #0.4 a0.4 #0.5 +2(f#0.5) #0.8 q2.2 L2 z #3")
+                await c.play("#1.5 +2(L0.3#0.3) f #0.4 a0.4 #0.5 +2(f#0.5) #0.8 q2.2 L2 z #3")
                 moved = true
                 break
             case "battle":
