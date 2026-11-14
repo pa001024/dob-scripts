@@ -15,8 +15,7 @@
 //   2. 角标显示"0"(大招已开)则不按Q(Q是开关，开着再按会关掉)；
 //      角标变回"30"时同样会再走一遍开场宏，所以重打不会漏召唤协战
 //   3. 瞄准由后台循环负责(与开枪解耦)：只要处于大招(Q)开启的战斗状态，就一直 0.3s 按住E循环瞄准
-//   4. 开枪：蓄力满(准星上方一点亮度超阈值)立刻左键；只靠截图轮询必然慢半拍，
-//      额外测量蓄力光环半径做线性外推，预测满蓄力时刻，提前进入高频截图确认(12ms)，全程不依赖 OCR
+//   4. 开枪：蓄力满(准星上方一点亮度超阈值)立刻左键，按战斗主循环节奏直接轮询该点亮度(不依赖 OCR)
 //   5. BOSS 血条变白 = 无敌，蓄力满了也不开枪，等血条恢复红色(见 imgs/cap28.png)
 //   6. 长时间看不到满蓄力：鼠标右键补开镜
 //   7. 蓄力时间上限：进图/开大后的第一枪不设上限(蓄到满)；之后开枪间隔按 1.3s 循环，
@@ -35,7 +34,7 @@ const g = {
 }
 
 // ===== debug 开关(默认关闭，可在脚本配置页勾选开启) =====
-// 开启后才打印 debug 日志 + 高频 setStatus(state/ult/ring/predict/stage)，避免刷屏
+// 开启后才打印 debug 日志 + 高频 setStatus(state/ult/invincible/stage)，避免刷屏
 // 低频 status(rooms/finish) 不受影响，始终上报
 /** @param {...any} a */
 function dlog(...a) {
@@ -137,17 +136,8 @@ const CFG = {
     /** 蓄力满判定点(1600x900)：准星上方这一点在满蓄力时会亮起，见 imgs/cap17/22/24/27/32.png */
     fullPoint: /** @type {[number, number]} */ ([788, 406]),
     fullBright: 160, // 该点亮度(三通道均值)大于该值即算蓄力满：实测满=206~240，未满<120
-    // ===== 蓄力预测 =====
-    // 蓄力圈会随进度收缩：约 53%=245px、70%=175px、87%=110px、100%=44px，收缩速度约 110~140px/s
-    // 每 ringSampleMs 量一次半径，用线性回归外推到 100% 的时刻，提前开始高频确认，命中即开枪
-    ringSampleMs: 80, // 半径采样间隔
-    ringFullRadius: 44, // 满蓄力时光环半径(px)
-    predictWindowMs: 700, // 预测剩余时间小于该值才进入预测等待
-    confirmLeadMs: 200, // 比预测满蓄力时刻提前多少开始高频确认(容忍预测误差)
-    confirmMaxMs: 800, // 高频确认最长持续时间(覆盖预测偏早的误差)
-    confirmPollMs: 12, // 高频确认的截图间隔
     shotCdMs: 400, // 两次开枪最小间隔(必须小于蓄力上限，防止同一发满蓄力重复点击)
-    ringLostMs: 15000, // 多久没看到满蓄力光环判定为脱镜(正常蓄力周期约4~10秒，留足余量)
+    ringLostMs: 15000, // 多久没看到满蓄力判定点判定为脱镜(正常蓄力周期约4~10秒，留足余量)
     recoverGapMs: 3000, // 补开镜的最小间隔
     qRetryMs: 4000, // 大招未开时按Q的重试间隔(等演出/输入生效，避免连按把大招开关来回切)
     // 选房：开启后当前屏幕没有100%房就直接随机进一间，不再自动滚屏找100%(默认关)
@@ -284,59 +274,13 @@ function isChargeFull(f) {
     return (r + g + b) / 3 > CFG.fullBright
 }
 
-/** 测量蓄力光环半径(像素)。环形UI是分段的，用多方向射线 + 半径直方图投票
- * @param {Mat} f
- * @returns {{ r: number, support: number } | null}
- */
-function ringRadius(f) {
-    const cx = 800
-    const cy = 450
-    const nrays = 16
-    const step = 3
-    const dmin = 32
-    const dmax = 280
-    /** @type {number[][]} */
-    const rays = []
-    for (let k = 0; k < nrays; k++) {
-        const ang = (Math.PI * 2 * k) / nrays
-        const ca = Math.cos(ang)
-        const sa = Math.sin(ang)
-        const hits = []
-        for (let d = dmin; d <= dmax; d += step) {
-            const x = Math.round(cx + ca * d)
-            const y = Math.round(cy + sa * d)
-            if (x < 0 || y < 0 || x >= 1600 || y >= 900) continue
-            const v = f.get_rgb(x, y)
-            const r = (v >> 16) & 0xff
-            const g = (v >> 8) & 0xff
-            const b = v & 0xff
-            if (r > 150 && b > 150 && r - g > 15 && b - g > 15) hits.push(d)
-        }
-        rays.push(hits)
-    }
-    let best = { r: -1, support: 0 }
-    for (let r = dmin; r <= dmax; r += step) {
-        let support = 0
-        for (const hits of rays) {
-            for (const h of hits) {
-                if (Math.abs(h - r) <= 8) {
-                    support++
-                    break
-                }
-            }
-        }
-        if (support > best.support) best = { r, support }
-    }
-    return best.support >= 6 ? best : null
-}
-
 async function main() {
     let count = 0
     let noFullStreak = 0 // 选房：连续"滚到底仍无100%"的 enter 轮数，超限则兜底进房防死循环
     let busyUntil = 0 // 进图/开大动作期间暂停蓄力判定
     let lastFinishAt = 0 // 上一次结算屏计数/点击的时刻(冷却内不重复处理)
     let finishHandled = false // 当前这张结算屏是否已处理过(离开finish状态后复位)
-    let lastRingAt = Date.now() // 最后一次看到满蓄力光环(准星粉色圈)的时刻
+    let lastRingAt = Date.now() // 最后一次看到满蓄力判定点(准星亮点)的时刻
     let lastRecoverAt = 0 // 最后一次补开镜的时刻
     let lastQAt = 0 // 最后一次按Q开大的时刻
     let lastShotAt = 0 // 最后一次开枪时刻
@@ -344,11 +288,8 @@ async function main() {
     let aimDownAt = 0 // 本轮按下E的时刻(按下后至少 aimSettleMs 才允许开枪)
     let aimPaused = false // 暂停后台瞄准循环(开场宏/补开镜等独占输入期间)
     let shotIdx = 0 // 进图/开大后已经开了几枪(第一枪不设蓄力上限，之后按循环上限)
-    let lastRingSampleAt = 0 // 上一次测量蓄力光环半径的时刻
     let lastInvAt = 0 // 上一次提示BOSS无敌的时刻(节流)
     let lastStageAt = 0 // 上一次幕次识别的时刻(节流，战斗主循环要快)
-    /** @type {{t: number, r: number}[]} */
-    let ringPts = [] // 本周期蓄力光环半径序列(用于预测)
     /** @type {string} */
     let prevState = g.state // 上一轮状态：从非战斗回到战斗时给蓄力识别一个宽限期
 
@@ -410,54 +351,10 @@ async function main() {
         if (Date.now() - lastShotAt <= CFG.shotCdMs) return false
         lastShotAt = Date.now()
         shotIdx++
-        ringPts = []
         dlog(full ? "蓄力满：开枪" : "到达蓄力上限：开枪")
         c.mc("l") // 瞄准由后台循环持续按住E，开枪只需左键
         await sleep(60)
         return true
-    }
-
-    /** 记录一次蓄力光环半径样本(半径突变/间隔太久则重建序列)；返回半径，未测到返回0
-     * t 用截图前的时刻，避免截图耗时造成系统性偏差(会把收缩速度估慢)
-     * @param {Mat} f @param {number} t
-     */
-    const sampleRing = (f, t) => {
-        const m = ringRadius(f)
-        if (!m || m.r <= CFG.ringFullRadius + 6) return 0
-        const lastP = ringPts[ringPts.length - 1]
-        // 半径突变(新周期/遮挡噪声)或间隔太久：重建样本
-        if (!lastP || Math.abs(m.r - lastP.r) > 30 || t - lastP.t > 1200) ringPts = []
-        ringPts.push({ t, r: m.r })
-        if (ringPts.length > 6) ringPts.shift()
-        return m.r
-    }
-
-    /** 用最近的半径样本线性外推，返回距离满蓄力的毫秒数；无法预测返回 Infinity */
-    const predictFullMs = () => {
-        if (ringPts.length < 2) return Infinity
-        const last = ringPts[ringPts.length - 1]
-        if (Date.now() - last.t > 400) return Infinity
-        if (last.r <= CFG.ringFullRadius + 6) return Infinity
-        const n = ringPts.length
-        let st = 0
-        let sr = 0
-        for (const p of ringPts) {
-            st += p.t
-            sr += p.r
-        }
-        const mt = st / n
-        const mr = sr / n
-        let num = 0
-        let den = 0
-        for (const p of ringPts) {
-            num += (p.t - mt) * (p.r - mr)
-            den += (p.t - mt) * (p.t - mt)
-        }
-        if (den <= 0) return Infinity
-        const slope = num / den // px/ms，蓄力圈收缩为负
-        if (slope > -0.05) return Infinity
-        const dt = (last.r - CFG.ringFullRadius) / -slope
-        return dt >= 0 && dt <= CFG.predictWindowMs ? dt : Infinity
     }
 
     setInterval(() => {
@@ -521,58 +418,9 @@ async function main() {
                     break
                 }
 
-                // --- 满蓄力判定(纯像素，准星外围亮粉色光环)：满了立刻开枪 ---
+                // --- 满蓄力判定：只测准星上方一点亮度(与检测血条无敌同一节奏)，满了立刻开枪 ---
                 if (isChargeFull(c.frame)) {
                     await tryShoot(c.frame) // 满蓄力但BOSS无敌或冷却中则原地等待
-                    break
-                }
-
-                // --- 蓄力预测：采样蓄力光环半径，线性外推满蓄力时刻 ---
-                const nowMs = Date.now()
-                if (nowMs - lastRingSampleAt >= CFG.ringSampleMs) {
-                    lastRingSampleAt = nowMs
-                    // 现截图测半径(不用共享帧，保证采样时刻准确)
-                    const rr = sampleRing(c.cap(), nowMs)
-                    if (rr) dstatus("ring", `r=${rr} 样本=${ringPts.length}`)
-                }
-
-                let predictMs = predictFullMs()
-                if (predictMs !== Infinity) {
-                    // 分段等到预测点(途中继续截图复核并重新外推，避免长睡错过提前充满)，
-                    // 临近后切高频截图(12ms)，满的瞬间立刻开枪
-                    let guard = 0
-                    while (guard++ < 8 && predictMs !== Infinity) {
-                        if (g.state !== "battle" && g.state !== "battle_lowhp") break
-                        const waitMs = predictMs - CFG.confirmLeadMs
-                        if (waitMs > 250) {
-                            dstatus("predict", `预计${Math.round(predictMs)}ms后满蓄力`)
-                            // 单次最多睡200ms：醒来重新截图复核+外推，避免盲等
-                            await sleep(Math.min(waitMs - 200, 200))
-                            const tw = Date.now()
-                            const fr = c.cap()
-                            const overdue = Date.now() - lastShotAt >= chargeCapMs()
-                            if (isChargeFull(fr) || overdue) {
-                                await tryShoot(fr, overdue)
-                                break
-                            }
-                            lastRingSampleAt = tw
-                            sampleRing(fr, tw)
-                            predictMs = predictFullMs()
-                            continue
-                        }
-                        const t0 = Date.now()
-                        while (Date.now() - t0 <= CFG.confirmMaxMs) {
-                            // 已离开战斗(BOSS死亡/过场)：停止高频确认
-                            if (g.state !== "battle" && g.state !== "battle_lowhp") break
-                            const fr = c.cap()
-                            const overdue = Date.now() - lastShotAt >= chargeCapMs()
-                            if (await tryShoot(fr, overdue)) break
-                            // 已满但无敌：不必再高频轮询，回主循环
-                            if (isChargeFull(fr) && isBossInvincible(fr)) break
-                            await sleep(CFG.confirmPollMs)
-                        }
-                        break
-                    }
                     break
                 }
 
