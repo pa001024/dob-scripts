@@ -1,11 +1,11 @@
 // ==UserScript==
 // @id MwAFNpKBQC
 // @name 黎瑟浴火共斗
-// @description 联袂演绎共斗：进图5/6召唤协战同伴 -> Q大招涡流狙击 -> 每枪长按E瞄准+蓄力100%开枪
+// @description 颗秒
 // @author pa
 // @version 1.0.0
 // @category 活动
-// @date 2026/11/10 17:06
+// @date 2026/11/10 18:12
 // ==/UserScript==
 
 // 黎瑟·浴火 共斗循环：
@@ -14,13 +14,13 @@
 //      (按W、两次空格分别按住0.5s/0.3s、开大、松开W、隔0.1s按5和6召唤协战同伴扶疏/煜明)
 //   2. 角标显示"0"(大招已开)则不按Q(Q是开关，开着再按会关掉)；
 //      角标变回"30"时同样会再走一遍开场宏，所以重打不会漏召唤协战
-//   3. 每枪：开枪后按住 E 瞄准 boss(一直按住到下一枪)，蓄力满(准星出现亮粉色光环)立刻左键开枪
-//      只靠截图轮询必然慢半拍：额外测量蓄力光环半径做线性外推，预测满蓄力时刻，
-//      提前进入高频截图确认(12ms)，满的瞬间立刻开枪，全程不依赖 OCR
-//   4. BOSS 血条变白 = 无敌，蓄力满了也不开枪，等血条恢复红色(见 imgs/cap28.png)
-//   5. 长时间看不到满蓄力光环：补 R 开镜
-//   6. 蓄力时间上限：进图/开大后的第一枪不设上限(蓄到满)；之后开枪间隔按 1.2s/1s/1s 循环
-//      (第二枪1.2s、第三枪1s、第四枪1s、第五枪回到1.2s)，到上限还没检测到满蓄力也直接开枪
+//   3. 瞄准由后台循环负责(与开枪解耦)：只要处于大招(Q)开启的战斗状态，就一直 0.3s 按住E循环瞄准
+//   4. 开枪：蓄力满(准星上方一点亮度超阈值)立刻左键；只靠截图轮询必然慢半拍，
+//      额外测量蓄力光环半径做线性外推，预测满蓄力时刻，提前进入高频截图确认(12ms)，全程不依赖 OCR
+//   5. BOSS 血条变白 = 无敌，蓄力满了也不开枪，等血条恢复红色(见 imgs/cap28.png)
+//   6. 长时间看不到满蓄力：鼠标右键补开镜
+//   7. 蓄力时间上限：进图/开大后的第一枪不设上限(蓄到满)；之后开枪间隔按 1.3s 循环，
+//      到上限还没检测到满蓄力也直接开枪
 
 import { Cap } from "cap"
 
@@ -125,24 +125,18 @@ const CFG = {
     //   -> {5} 等0.1s {6} 召唤协战同伴(扶疏/煜明)
     // 两次空格必须带按住时长(_0.5/_0.3)：用 {space} 瞬点会被游戏吞掉
     // 注意 5/6 必须写成 {5}..{6}：直接写 56 会被解析成"按住5键6秒"
-    macroEnter: "w #0.5 _0.5 _0.3 q w^ {5}#0.1{6} #1 +5(e#0.3)",
-    // 长按E瞄准：按下/松开拆开，按住期间实时监控蓄力，开枪前松开、下一枪前再按下
-    macroAimDown: "e0",
-    macroAimUp: "e^",
-    aimDelayMs: 100, // 开枪/开大后隔多久按下E(按下后一直按住到开枪)
+    macroEnter: "w #0.5 _0.5 _0.3 q w^ {5}#0.1{6} #1.3 e0.5 +5(e#0.35)",
+    // 瞄准：不再"一枪一次"，改成后台循环——只要处于大招(Q)瞄准状态，就一直 0.3 秒循环按住E
+    aimHoldMs: 300, // 一轮瞄准按住时长(秒数循环：按住0.3s -> 松开 -> 间隔后再按)
+    aimGapMs: 60, // 一轮瞄准按住结束到下一轮之间的间隔
+    aimSettleMs: 100, // 按下E后至少按住这么久才允许开枪(等游戏真正进入瞄准状态)
+    aimLoopIdleMs: 100, // 不满足瞄准条件时后台循环的检查间隔
     // 蓄力时间上限(ms)数组：任意长度，按顺序循环开枪
     // 开枪后最多等这么久就开枪(期间蓄力满会提前开枪)；进图/开大后的第一枪不设上限
-    shotCycle: [1300, 960, 960],
-    /** 蓄力满时准星外围亮粉色光环的采样点(1600x900)，见 imgs/cap17/20/22/24/27/32.png */
-    fullRingPts: /** @type {[number, number][]} */ ([
-        [755, 439],
-        [755, 461],
-        [845, 459],
-        [753, 441],
-        [846, 458],
-        [756, 463],
-    ]),
-    fullRingNeed: 4, // 6个点中至少几个命中粉色才算蓄力满
+    shotCycle: [1300, 1300, 1300],
+    /** 蓄力满判定点(1600x900)：准星上方这一点在满蓄力时会亮起，见 imgs/cap17/22/24/27/32.png */
+    fullPoint: /** @type {[number, number]} */ ([788, 406]),
+    fullBright: 160, // 该点亮度(三通道均值)大于该值即算蓄力满：实测满=206~240，未满<120
     // ===== 蓄力预测 =====
     // 蓄力圈会随进度收缩：约 53%=245px、70%=175px、87%=110px、100%=44px，收缩速度约 110~140px/s
     // 每 ringSampleMs 量一次半径，用线性回归外推到 100% 的时刻，提前开始高频确认，命中即开枪
@@ -162,6 +156,20 @@ const CFG = {
     roomScrollWheel: -360, // 选房：每次滚动量(负数向下)
     roomScrollDelayMs: 700, // 选房：滚后等待列表稳定再OCR
     roomRefreshMax: 3, // 选房：连续刷新仍无100%则兜底随便进一间，防止死循环
+    finishCdMs: 8000, // 结算屏点"离开舞台"后的冷却：界面卡住/加载期间状态仍是finish，防止重复计数和重复点击
+}
+
+/** 演绎结束(结算)屏判定，见 imgs/cap7.png
+ * 两个金色礼盒图标(基础贡献奖励/本场最佳奖励)实测 rgb≈(255,241,172)/(255,233,167)，
+ * 40 张截图里只有结算屏是这种金色；奖励未满足、礼盒变灰时用底部"离开舞台"按钮兜底。
+ * 旧版沿用《法露茜共斗》的 croi(649,552,14,16,"625e93e4ec0b5354")，
+ * 本模式结算屏该区域只是空卡片背景，哈希永远匹配不上 → finish 永不触发，全部落到 default。
+ * @param {Mat} f
+ */
+function isFinish(f) {
+    if (cc(f, 643, 450, 0xfff1ac, 20) && cc(f, 925, 450, 0xffe9a7, 20)) return true
+    // 兜底："离开舞台"按钮(白字 + 墨色底)
+    return cc(f, 760, 742, 0xf9f9f9, 20) && cc(f, 700, 742, 0x070608, 12) && cc(f, 860, 742, 0x04080f, 12)
 }
 
 /** 状态检测，坐标沿用共斗
@@ -173,7 +181,7 @@ function checkState(frame) {
     if (cc(frame, 46, 26, 0xffffff, 60)) {
         return "battle"
     } else {
-        if (c.croi(c.frame.roi(649, 552, 14, 16), "625e93e4ec0b5354", 10)) {
+        if (isFinish(frame)) {
             return "finish"
         } else {
             if (cc(frame, 1537, 880, 0x000000, 10)) {
@@ -263,20 +271,17 @@ function isBossInvincible(f) {
     return white >= 3
 }
 
-/** 蓄力是否满：满蓄力时准星外围会出现亮粉色光环(6个采样点，见 imgs/cap17~32)
- * 未满时这些点基本是场景/黑色准星，多帧实测 0/6 命中
+/** 蓄力是否满：满蓄力时准星上方 (788,406) 会亮起，只取这一个点测亮度
+ * 满蓄力实测 rgb 约 (241,149,228)~(255,211,255)，三通道均值 206~240
+ * 未满时该点是场景/准星，实测均值 <120(见 imgs/cap17/22/24/27/32.png)
  * @param {Mat} f
  */
 function isChargeFull(f) {
-    let pink = 0
-    for (const [x, y] of CFG.fullRingPts) {
-        const v = f.get_rgb(x, y)
-        const r = (v >> 16) & 0xff
-        const g = (v >> 8) & 0xff
-        const b = v & 0xff
-        if (r > 190 && b > 190 && r - g > 25 && b - g > 25) pink++
-    }
-    return pink >= CFG.fullRingNeed
+    const v = f.get_rgb(CFG.fullPoint[0], CFG.fullPoint[1])
+    const r = (v >> 16) & 0xff
+    const g = (v >> 8) & 0xff
+    const b = v & 0xff
+    return (r + g + b) / 3 > CFG.fullBright
 }
 
 /** 测量蓄力光环半径(像素)。环形UI是分段的，用多方向射线 + 半径直方图投票
@@ -329,11 +334,15 @@ async function main() {
     let count = 0
     let noFullStreak = 0 // 选房：连续"滚到底仍无100%"的 enter 轮数，超限则兜底进房防死循环
     let busyUntil = 0 // 进图/开大动作期间暂停蓄力判定
+    let lastFinishAt = 0 // 上一次结算屏计数/点击的时刻(冷却内不重复处理)
+    let finishHandled = false // 当前这张结算屏是否已处理过(离开finish状态后复位)
     let lastRingAt = Date.now() // 最后一次看到满蓄力光环(准星粉色圈)的时刻
     let lastRecoverAt = 0 // 最后一次补开镜的时刻
     let lastQAt = 0 // 最后一次按Q开大的时刻
     let lastShotAt = 0 // 最后一次开枪时刻
-    let aimHeld = false // E是否正按住(长按瞄准中)
+    let aimHeldNow = false // 后台瞄准循环此刻是否正按住E(松开间隙不开枪，避免空放)
+    let aimDownAt = 0 // 本轮按下E的时刻(按下后至少 aimSettleMs 才允许开枪)
+    let aimPaused = false // 暂停后台瞄准循环(开场宏/补开镜等独占输入期间)
     let shotIdx = 0 // 进图/开大后已经开了几枪(第一枪不设蓄力上限，之后按循环上限)
     let lastRingSampleAt = 0 // 上一次测量蓄力光环半径的时刻
     let lastInvAt = 0 // 上一次提示BOSS无敌的时刻(节流)
@@ -348,17 +357,45 @@ async function main() {
      */
     const chargeCapMs = () => (shotIdx === 0 ? Infinity : CFG.shotCycle[(shotIdx - 1) % CFG.shotCycle.length])
 
-    /** 松开长按E(如果按着) */
-    const releaseAim = async () => {
-        if (!aimHeld) return
-        aimHeld = false
-        await c.play(CFG.macroAimUp)
+    /** 暂停后台瞄准循环(执行开场宏等独占输入时用) @param {boolean} p */
+    const pauseAim = (p) => {
+        aimPaused = p
     }
 
-    /** 尝试开枪：满蓄力(粉色光环)或已到蓄力上限、且BOSS不无敌时左键。返回是否已开枪
+    /** 后台瞄准循环：只要处于大招(Q)瞄准状态(战斗中且大招已开)，就一直 0.3 秒循环按住E
+     * 与开枪完全解耦：开枪只左键，瞄准由本循环持续维持
+     * 不等待 busyUntil：大招演出期间就提前按住E，保证演出结束后的第一枪是瞄准状态
+     * 直接用 kd/ku 而不是 play：避免和主循环的 play 宏互相打断
+     */
+    const aimLoop = async () => {
+        while (true) {
+            const inBattle = g.state === "battle" || g.state === "battle_lowhp"
+            // 注意不看 busyUntil：第一枪要在大招演出一结束就处于瞄准状态，瞄准必须提前开始
+            const canAim = inBattle && !aimPaused && isUltActive(c.frame)
+            if (!canAim) {
+                await sleep(CFG.aimLoopIdleMs)
+                continue
+            }
+            aimHeldNow = true
+            aimDownAt = Date.now()
+            c.kd("e") // 按住E瞄准
+            // 分段睡：中途被暂停(开场宏/补开镜)要立刻松手
+            const t0 = Date.now()
+            while (Date.now() - t0 < CFG.aimHoldMs && !aimPaused) {
+                await sleep(Math.min(50, CFG.aimHoldMs - (Date.now() - t0)))
+            }
+            c.ku("e") // 松开，下一轮再按
+            aimHeldNow = false
+            await sleep(CFG.aimGapMs)
+        }
+    }
+
+    /** 尝试开枪：满蓄力(准星亮点)或已到蓄力上限、且BOSS不无敌时左键。返回是否已开枪
      * @param {Mat} f @param {boolean} [force] 到蓄力上限强制开枪(不再等满蓄力判定)
      */
     const tryShoot = async (f, force = false) => {
+        // 必须正处在瞄准按住期间(且已按下 aimSettleMs)：瞄准是 0.3s 循环，松开间隙或刚按下都算空放
+        if (!aimHeldNow || Date.now() - aimDownAt < CFG.aimSettleMs) return false
         const full = isChargeFull(f)
         if (!full && !force) return false
         lastRingAt = Date.now()
@@ -375,8 +412,7 @@ async function main() {
         shotIdx++
         ringPts = []
         dlog(full ? "蓄力满：开枪" : "到达蓄力上限：开枪")
-        await releaseAim() // 先松开E再开枪(与旧瞄准宏 e1#0.2 的先后顺序一致)
-        c.mc("l")
+        c.mc("l") // 瞄准由后台循环持续按住E，开枪只需左键
         await sleep(60)
         return true
     }
@@ -429,9 +465,12 @@ async function main() {
         dstatus("state", g.state)
     }, 50)
 
+    // 后台瞄准循环：与主循环并行，持续按住E瞄准(0.3s 一轮)，与开枪解耦
+    void aimLoop()
+
     while (true) {
-        // 离开战斗(完成/过场/大厅)：松开按住的E，避免带回下一场
-        if (g.state !== "battle" && g.state !== "battle_lowhp") await releaseAim()
+        // 离开结算屏后复位处理开关，下一张结算屏(下一轮结束)才能再次计数/点击
+        if (g.state !== "finish") finishHandled = false
         // 从演出/过场回到战斗：重置满蓄力基准与蓄力上限计时，避免刚回战斗就误判脱镜/提前强制开枪
         if ((g.state === "battle" || g.state === "battle_lowhp") && prevState !== "battle" && prevState !== "battle_lowhp") {
             lastRingAt = Date.now()
@@ -447,9 +486,13 @@ async function main() {
                     dstatus("ult", "大招未开(视为重新进场)")
                     if (Date.now() - lastQAt > CFG.qRetryMs) {
                         lastQAt = Date.now()
-                        await releaseAim() // 防上一场遗留的E按住
+                        pauseAim(true) // 开场宏独占输入，暂停后台瞄准
                         dlog("大招未开：执行开场宏(W+空格+Q+5/6)")
-                        await c.play(CFG.macroEnter)
+                        try {
+                            await c.play(CFG.macroEnter)
+                        } finally {
+                            pauseAim(false)
+                        }
                         // 开场宏里已经按过Q：刷新Q时刻，避免角标还没刷新时再按一次把大招关掉
                         lastShotAt = Date.now() // 开大后重新计算瞄准延迟
                         lastRingAt = Date.now()
@@ -465,9 +508,12 @@ async function main() {
                     lastStageAt = Date.now()
                     const s = +numocr(c.frame.roi(60, 72, 24, 24))
                     if (s && s <= 10) setStatus("stage", s)
+                    if(s>2) c.kb("z")
                 }
 
                 if (Date.now() < busyUntil) break
+
+                // 瞄准已交给后台 aimLoop 持续 0.3s 循环按住E，这里只负责开枪判定
 
                 // --- 蓄力时间上限：距上一枪到达上限就开枪(不再等满蓄力判定；第一枪不设上限) ---
                 if (Date.now() - lastShotAt >= chargeCapMs()) {
@@ -530,20 +576,16 @@ async function main() {
                     break
                 }
 
-                // --- 未满：按住E瞄准boss(开枪/开大后延迟 aimDelayMs 按下，一直按住到开枪) ---
-                if (!aimHeld && Date.now() - lastShotAt > CFG.aimDelayMs) {
-                    aimHeld = true
-                    dlog("长按E瞄准")
-                    await c.play(CFG.macroAimDown)
-                    break
-                }
+                // --- 未满：等待蓄力(瞄准由后台 aimLoop 持续按住E) ---
 
-                // 长时间看不到满蓄力光环：大概率脱镜，补 R 开镜
+                // 长时间看不到满蓄力：大概率脱镜，鼠标右键补开镜(暂停瞄准循环，避免E键冲突)
                 if (Date.now() - Math.max(lastRingAt, lastShotAt) > CFG.ringLostMs && Date.now() - lastRecoverAt > CFG.recoverGapMs) {
                     lastRecoverAt = Date.now()
-                    await releaseAim()
-                    dlog("长时间未见满蓄力：R补开镜")
-                    await c.play("R0.05")
+                    pauseAim(true)
+                    dlog("长时间未见满蓄力：右键补开镜")
+                    c.mc("r")
+                    await sleep(60)
+                    pauseAim(false)
                 }
                 break
             }
@@ -637,16 +679,28 @@ async function main() {
                 await c.play(`L(${cx},${cy})#0.5 L(1190,775)#0.5`)
                 break
             }
-            case "finish":
+            case "finish": {
+                // 点"离开舞台"后界面会卡住/加载一会儿，状态仍是 finish：
+                // 用开关+冷却兜住，保证同一张结算屏只计数、只点一次
+                if (finishHandled || Date.now() - lastFinishAt < CFG.finishCdMs) {
+                    finishHandled = true
+                    await sleep(300)
+                    break
+                }
+                finishHandled = true
+                lastFinishAt = Date.now()
                 console.log(`Excellent! finished ${++count} times`)
                 c.mc(839, 742)
                 await sleep(2e3)
                 break
+            }
             default:
             case "unknown":
                 await sleep(1000)
-                if (g.state === "unknown") c.mc(839, 742)
-                if (cc(c.frame, 1307, 233, 0xddd7d1, 10)) c.mc(1307, 233)
+                if (g.state === "unknown") {
+                    c.mc(839, 742)
+                    c.mc(1307, 233)
+                }
                 break
         }
         // 战斗中循环要快(蓄力/开枪判定的采样依赖它)；非战斗场景没必要高频

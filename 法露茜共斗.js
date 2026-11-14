@@ -5,7 +5,7 @@
 // @author pa
 // @version 1.2.0
 // @category 活动
-// @date 2026/11/10 16:49
+// @date 2026/11/10 17:31
 // ==/UserScript==
 
 import { Cap } from "cap"
