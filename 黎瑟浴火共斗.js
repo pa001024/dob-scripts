@@ -5,7 +5,7 @@
 // @author pa
 // @version 1.0.0
 // @category 活动
-// @date 2026/11/16 19:52
+// @date 2026/11/16 23:08
 // ==/UserScript==
 
 // 黎瑟·浴火 共斗循环：
@@ -124,15 +124,15 @@ const CFG = {
     //   -> {5} 等0.1s {6} 召唤协战同伴(扶疏/煜明)
     // 两次空格必须带按住时长(_0.5/_0.3)：用 {space} 瞬点会被游戏吞掉
     // 注意 5/6 必须写成 {5}..{6}：直接写 56 会被解析成"按住5键6秒"
-    macroEnter: "w #0.5 _0.5 _0.3 q w^ {5}#0.1{6} #1.3 +3(e#0.35)",
+    macroEnter: "w0 #0.5 _0.4 L0.1 {5}#0.1{6} e0.1#0.2q w^ #1.3 +3(e#0.35)",
     // 瞄准：不再"一枪一次"，改成主循环维护——只要处于大招(Q)瞄准状态，就一直 0.3 秒循环按住E
     aimHoldMs: 350, // 一轮瞄准按住时长(按住0.3s -> 松开 -> 间隔后再按)
     aimGapMs: 60, // 一轮瞄准按住结束到下一轮之间的间隔
     aimSettleMs: 100, // 按下E后至少按住这么久才允许开枪(等游戏真正进入瞄准状态)
     // 蓄力时间上限(ms)数组：任意长度，按顺序循环开枪
     // 开枪后最多等这么久就开枪(期间蓄力满会提前开枪)；进图/开大后的第一枪用 firstShotCapMs
-    shotCycle: [1300, 1300, 1300],
-    firstShotCapMs: 3000, // 进图/开大后第一枪的蓄力上限：第一枪蓄力更慢，最多等3秒
+    shotCycle: [1280],
+    firstShotCapMs: 2600, // 进图/开大后第一枪的蓄力上限：第一枪蓄力更慢，最多等3秒
     /** 蓄力满判定点(1600x900)：准星上方这一点在满蓄力时会亮起，见 imgs/cap17/22/24/27/32.png */
     fullPoint: /** @type {[number, number]} */ ([788, 406]),
     fullBright: 128, // 该点亮度(三通道均值)过半(255的一半)即算蓄力满；实测满=206~240，未满<120
@@ -339,7 +339,7 @@ async function main() {
     }
 
     /** 暂停瞄准(执行开场宏/右键补开镜等独占输入时用)：暂停时立刻松开E @param {boolean} p */
-    const pauseAim = (p) => {
+    const pauseAim = p => {
         aimPaused = p
         if (p && aimHeldNow) releaseAim()
     }
@@ -394,8 +394,11 @@ async function main() {
         try {
             const f = c.cap()
             if (!hasFrame(f)) return // 换局/加载中截图可能失败，沿用上一轮状态
-            g.state = checkState(f)
-            dstatus("state", g.state)
+            const ns = checkState(f)
+            if (ns !== g.state) {
+                g.state = ns
+                setStatus("state", g.state)
+            }
         } catch (e) {
             dlog(`状态检测异常: ${e instanceof Error ? e.message : e}`)
         }
@@ -438,15 +441,15 @@ async function main() {
                         break
                     }
                     dstatus("ult", "大招已开")
-    
+
                     // --- 幕次识别(仅用于显示，不做任何操作；节流避免拖慢开枪判定) ---
                     if (Date.now() - lastStageAt > 1000) {
                         lastStageAt = Date.now()
                         const s = +numocr(c.frame.roi(60, 72, 24, 24))
                         if (s && s <= 10) setStatus("stage", s)
-                        if(s>2) c.kb("z")
+                        if (s > 2) c.kb("z")
                     }
-    
+
                     if (Date.now() < busyUntil) break
 
                     // --- 狙击状态检测：开镜时右侧有倍率刻度和"关镜"提示，
